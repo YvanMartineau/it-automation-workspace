@@ -1,0 +1,46 @@
+# ============================================================
+#  docker-compose.prod.yml — Oracle Always Free ARM VM
+#  Usage: docker compose -f docker-compose.prod.yml up -d
+# ============================================================
+version: "3.9"
+
+services:
+  fastapi:
+    build:
+      context: ../backend
+      dockerfile: Dockerfile
+    env_file: ../.env
+    restart: always
+    mem_limit: 512m
+    expose:
+      - "8000"
+    command: uvicorn main:app --host 0.0.0.0 --port 8000 --workers 2
+
+  n8n:
+    image: n8nio/n8n:latest
+    volumes:
+      - n8n_data:/home/node/.n8n
+    environment:
+      - N8N_BASIC_AUTH_ACTIVE=true
+      - N8N_BASIC_AUTH_USER=admin
+      - N8N_BASIC_AUTH_PASSWORD=${N8N_PASSWORD}
+      - WEBHOOK_URL=${CLOUDFLARE_PUBLIC_URL}/n8n
+    restart: always
+    mem_limit: 512m
+    expose:
+      - "5678"
+
+  nginx:
+    image: nginx:alpine
+    volumes:
+      - ./nginx/nginx.prod.conf:/etc/nginx/nginx.conf:ro
+    ports:
+      - "80:80"
+    depends_on:
+      - fastapi
+      - n8n
+    restart: always
+    mem_limit: 64m
+
+volumes:
+  n8n_data:

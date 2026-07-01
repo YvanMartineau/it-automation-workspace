@@ -1,0 +1,113 @@
+# ============================================================
+#  PROJECT 1 — IT Automation Platform
+#  .gitignore — enterprise hardened
+#  RULE: When in doubt, ignore it. Secrets leak once.
+# ============================================================
+
+# ── Secrets & credentials (NEVER commit these) ──────────────
+.env
+.env.*
+!.env.example
+*.pem
+*.key
+*.p12
+*.pfx
+*.crt
+*.cer
+*_rsa
+*_rsa.pub
+*_ed25519
+*_ed25519.pub
+secrets/
+.secrets/
+credentials/
+*credentials*.json
+*service-account*.json
+*client_secret*.json
+# Aiven CA cert — treat as sensitive
+ca.pem
+aiven-ca.pem
+
+# ── Python ──────────────────────────────────────────────────
+__pycache__/
+*.py[cod]
+*$py.class
+*.so
+*.egg
+*.egg-info/
+dist/
+build/
+.eggs/
+.Python
+pip-log.txt
+pip-delete-this-directory.txt
+.venv/
+venv/
+env/
+ENV/
+.python-version
+.mypy_cache/
+.dmypy.json
+dmypy.json
+.ruff_cache/
+.pytest_cache/
+.coverage
+coverage.xml
+htmlcov/
+*.cover
+.hypothesis/
+
+# ── Node / Frontend ─────────────────────────────────────────
+node_modules/
+dist/
+dist-ssr/
+*.local
+.npm
+.eslintcache
+.stylelintcache
+
+# ── Docker ──────────────────────────────────────────────────
+# Never ignore docker-compose files — they are config not secrets
+# Secrets passed via .env, not hardcoded in compose files
+
+# ── IDEs & OS ───────────────────────────────────────────────
+.vscode/
+!.vscode/extensions.json
+!.vscode/settings.json.example
+.idea/
+*.swp
+*.swo
+*~
+.DS_Store
+.DS_Store?
+._*
+.Spotlight-V4
+.Trashes
+ehthumbs.db
+Thumbs.db
+desktop.ini
+
+# ── Logs ────────────────────────────────────────────────────
+*.log
+logs/
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+pnpm-debug.log*
+
+# ── Reports & temp output ───────────────────────────────────
+*.pdf
+reports/output/
+/tmp/
+
+# ── Alembic ─────────────────────────────────────────────────
+# Keep migrations — never ignore versions/
+
+# ── n8n ─────────────────────────────────────────────────────
+# n8n_data/ is a Docker volume — not in repo
+# Workflow JSON exports ARE committed under infra/n8n-workflows/
+
+# ── Test artifacts ──────────────────────────────────────────
+.pytest_cache/
+test-results/
+junit.xml

@@ -1,0 +1,29 @@
+# ============================================================
+#  Aiven Keep-Alive — pings DB every Monday at 07:00 UTC
+#  Prevents Aiven free instance from shutting down due to inactivity
+# ============================================================
+name: Aiven Keep-Alive
+
+on:
+  schedule:
+    - cron: "0 7 * * 1"
+  workflow_dispatch:
+
+jobs:
+  ping:
+    name: Ping Aiven PostgreSQL
+    runs-on: ubuntu-latest
+    steps:
+      - name: Install psql client
+        run: sudo apt-get install -y postgresql-client
+
+      - name: Ping database
+        run: |
+          psql "${{ secrets.AIVEN_DATABASE_URL_PLAIN }}" \
+            -c "SELECT 'keep-alive' AS status, NOW() AS pinged_at;" \
+            --no-password
+        env:
+          PGSSLMODE: require
+
+      - name: Log result
+        run: echo "Aiven keep-alive ping sent at $(date -u)"
