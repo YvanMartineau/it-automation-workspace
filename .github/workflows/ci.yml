@@ -1,15 +1,15 @@
 # ============================================================
 #  GitHub Actions CI — Project 1 IT Automation Platform
-#  Triggers: push and PR to main and develop
+#  Triggers: push and PR to main and development
 #  Jobs: backend tests, frontend lint, secret scan
 # ============================================================
 name: CI
 
 on:
   push:
-    branches: [main, develop]
+    branches: [main, development]
   pull_request:
-    branches: [main, develop]
+    branches: [main, development]
 
 jobs:
   # ── Secret scanning (runs first — fail fast) ───────────────
