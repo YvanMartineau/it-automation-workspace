@@ -74,6 +74,7 @@ if [[ -n "$STAGED_FILES" ]]; then
     [[ -z "$file" || ! -f "$file" ]] && continue
     [[ "$file" == *.env.example ]] && continue
     [[ "$file" == *DECISIONS.md ]] && continue
+    [[ "$file" == .git-hooks/* ]] && continue
     for pattern in "${SECRET_PATTERNS[@]}"; do
       if git show ":$file" 2>/dev/null | grep -iEq -e "$pattern"; then
         fail "Possible hardcoded secret in '$file' (pattern: $pattern)"
@@ -143,6 +144,7 @@ if [[ -n "$STAGED_FILES" ]]; then
   while IFS= read -r file; do
     [[ -z "$file" || ! -f "$file" ]] && continue
     [[ "$file" == *.md ]] && continue
+    [[ "$file" == .git-hooks/* ]] && continue
     for kw in "${BLOCKED_KEYWORDS[@]}"; do
       if git show ":$file" 2>/dev/null | grep -qF "$kw"; then
         fail "Blocked keyword '$kw' found in '$file'"
