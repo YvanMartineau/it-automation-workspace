@@ -1,4 +1,3 @@
-"""user SQLAlchemy model — implementation pending."""
 """SQLAlchemy User model — auth identity and role."""
 import enum
 import uuid

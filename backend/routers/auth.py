@@ -1,4 +1,3 @@
-"""auth router — implementation pending."""
 """
 POST /auth/login    — verify credentials, issue access token + refresh cookie
 POST /auth/refresh  — exchange valid refresh cookie for new access token
