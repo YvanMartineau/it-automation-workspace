@@ -11,9 +11,12 @@ services:
       dockerfile: Dockerfile
     env_file: ../.env
     ports:
-      - "8000:8000"
+      - "127.0.0.1:8000:8000"
     volumes:
       - ../backend:/app
+    #Added environment variable for database connection
+    environment:
+      - DATABASE_URL=postgresql://dev:dev@postgres_local:5432/automation_dev  
     depends_on:
       postgres_local:
         condition: service_healthy
@@ -44,14 +47,20 @@ services:
       POSTGRES_DB: automation_dev
       POSTGRES_USER: dev
       POSTGRES_PASSWORD: dev
+    #command is used to set PostgreSQL configuration parameters
+    command: >
+      postgres
+      -c shared_buffers=32MB
+      -c work_mem=4MB
+      -c max_connections=30
     ports:
-      - "5432:5432"
+      - "127.0.0.1:5432:5432"
     volumes:
       - postgres_dev_data:/var/lib/postgresql/data
     healthcheck:
-      test: ["CMD-SHELL", "pg_isready -U dev -d automation_dev"]
-      interval: 10s
-      timeout: 5s
+      test: ["CMD-SHELL", "pg_isready -h 127.0.0.1 -U dev -d automation_dev"]
+      interval: 5s
+      timeout: 3s
       retries: 5
     mem_limit: 256m
 
@@ -60,8 +69,10 @@ services:
     environment:
       PGADMIN_DEFAULT_EMAIL: admin@local.dev
       PGADMIN_DEFAULT_PASSWORD: admin
+      #added to avoid error: "pgAdmin4 is running in SERVER_MODE. Please set PGADMIN_CONFIG_SERVER_MODE to False to run in DESKTOP_MODE."
+      PGADMIN_CONFIG_SERVER_MODE: 'False'
     ports:
-      - "5050:80"
+      - "127.0.0.1:5050:80"
     depends_on:
       - postgres_local
     mem_limit: 256m
