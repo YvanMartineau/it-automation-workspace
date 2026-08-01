@@ -62,6 +62,9 @@ jobs:
       - name: Ruff format check
         run: ruff format backend/ --check
 
+      - name: Ruff lint
+        run: ruff check backend/ --fix
+
       - name: Wait for PostgreSQL
         run: |
           python -c "
