@@ -13,6 +13,7 @@ from settings import get_settings
 from security.rate_limiter import limiter
 # from services.scheduler import start_scheduler, stop_scheduler
 # from routers import auth, devices, scan, onboard, audit, reports
+from routers import auth
 
 settings = get_settings()
 
@@ -45,7 +46,7 @@ def create_app() -> FastAPI:
         allow_headers=["Authorization", "Content-Type"],
     )
 
-    # app.include_router(auth.router, prefix="/auth", tags=["auth"])
+    app.include_router(auth.router, prefix="/auth", tags=["auth"])
     # app.include_router(devices.router, prefix="/devices", tags=["devices"])
     # app.include_router(scan.router, prefix="/scan", tags=["scan"])
     # app.include_router(onboard.router, prefix="/onboard", tags=["onboard"])

@@ -22,21 +22,21 @@ class Settings(BaseSettings):
     REFRESH_TOKEN_EXPIRE_DAYS: int = 7
 
     # Microsoft Graph
-    GRAPH_TENANT_ID: str
-    GRAPH_CLIENT_ID: str
-    GRAPH_CLIENT_SECRET: str
-    GRAPH_DEFAULT_GROUP_ID: str = ""
+    #GRAPH_TENANT_ID: str
+    #GRAPH_CLIENT_ID: str
+    #GRAPH_CLIENT_SECRET: str
+    #GRAPH_DEFAULT_GROUP_ID: str = ""
 
     # n8n
-    N8N_ONBOARDING_WEBHOOK_URL: str
-    N8N_WEBHOOK_TIMEOUT_SECONDS: int = 5
+    #N8N_ONBOARDING_WEBHOOK_URL: str
+    #N8N_WEBHOOK_TIMEOUT_SECONDS: int = 5
 
     # Gmail OAuth2
-    GMAIL_OAUTH_CLIENT_ID: str
-    GMAIL_OAUTH_CLIENT_SECRET: str
-    GMAIL_OAUTH_REFRESH_TOKEN: str
-    GMAIL_SENDER_ADDRESS: str
-    ADMIN_ALERT_EMAIL: str
+    #GMAIL_OAUTH_CLIENT_ID: str
+    #GMAIL_OAUTH_CLIENT_SECRET: str
+    #GMAIL_OAUTH_REFRESH_TOKEN: str
+    #GMAIL_SENDER_ADDRESS: str
+    #ADMIN_ALERT_EMAIL: str
 
     # App
     FRONTEND_URL: str = "http://localhost:5173"

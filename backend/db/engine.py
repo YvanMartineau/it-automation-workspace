@@ -10,7 +10,9 @@ class Base(DeclarativeBase):
     pass
 
 engine = create_async_engine(
-    settings.DATABASE_URL, echo=False, pool_pre_ping=True, pool_size=5, max_overflow=10,
+    #I Commented this out since Aiven is not ready yet, so we use local postgres for now. we move DATABASE_URL to TEST_DATABASE_URL.
+    #settings.DATABASE_URL, echo=False, pool_pre_ping=True, pool_size=5, max_overflow=10,
+    settings.TEST_DATABASE_URL, echo=False, pool_pre_ping=True, pool_size=5, max_overflow=10,
 )
 AsyncSessionLocal = async_sessionmaker(engine, class_=AsyncSession, expire_on_commit=False)
 
