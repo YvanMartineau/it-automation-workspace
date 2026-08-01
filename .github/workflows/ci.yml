@@ -26,7 +26,7 @@ jobs:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
 
   # ── Backend tests ──────────────────────────────────────────
-  backend:
+backend:
     name: Backend Tests (Python 3.12)
     runs-on: ubuntu-latest
     needs: secret-scan
@@ -56,6 +56,20 @@ jobs:
         run: ruff check backend/
       - name: Ruff format check
         run: ruff format backend/ --check
+      - name: Wait for PostgreSQL
+        run: |
+          python -c "
+          import socket, time
+          for _ in range(30):
+              try:
+                  with socket.create_connection(('127.0.0.1', 5432), timeout=1):
+                      print('PostgreSQL is up!')
+                      break
+              except OSError:
+                  time.sleep(1)
+          else:
+              raise TimeoutError('PostgreSQL failed to start in time')
+          "
       - name: Pytest with coverage
         run: |
           pytest backend/tests/ \
@@ -64,7 +78,7 @@ jobs:
             --cov-report=xml \
             --cov-fail-under=70 -v
         env:
-          TEST_DATABASE_URL: postgresql+asyncpg://testuser:testpass@localhost:5432/automation_test
+          TEST_DATABASE_URL: postgresql+asyncpg://testuser:testpass@127.0.0.1:5432/automation_test
           JWT_SECRET_KEY: ci-test-secret-key-must-be-32-bytes-longx
           JWT_ALGORITHM: HS256
           ACCESS_TOKEN_EXPIRE_MINUTES: "15"
