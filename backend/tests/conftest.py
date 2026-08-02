@@ -7,7 +7,7 @@ from db.engine import Base, get_db
 from settings import get_settings
 
 settings = get_settings()
-TEST_ENGINE = create_async_engine(settings.TEST_DATABASE_URL, echo=False)
+TEST_ENGINE = create_async_engine(settings.DEV_DATABASE_URL, echo=False)
 TestSessionLocal = async_sessionmaker(TEST_ENGINE, class_=AsyncSession, expire_on_commit=False)
 
 @pytest.fixture(scope="session", autouse=True)
