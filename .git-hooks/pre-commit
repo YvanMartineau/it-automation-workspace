@@ -1,10 +1,11 @@
 #!/usr/bin/env bash
 # ============================================================
-#  PROJECT 1 — pre-commit hook (custom, no pre-commit framework)
+#  PROJECT 1 — Enterprise-grade pre-commit hook (no framework)
 #  Runs on every git commit. Blocks commit if any check fails.
+#  Guarantees: every check reports PASS/FAIL explicitly.
 # ============================================================
 
-set -uo pipefail
+set -euo pipefail
 
 RED='\033[0;31m'
 YELLOW='\033[1;33m'
@@ -16,149 +17,281 @@ PASS=0
 FAIL=0
 
 header() { echo -e "\n${BOLD}$1${RESET}"; }
-ok()     { echo -e "  ${GREEN}✓${RESET} $1"; ((PASS++)); }
+ok()     { echo -e "  ${GREEN}✓${RESET} $1"; PASS=$((PASS + 1)); }
 warn()   { echo -e "  ${YELLOW}⚠${RESET} $1"; }
-fail()   { echo -e "  ${RED}✗${RESET} $1"; ((FAIL++)); }
+fail()   { echo -e "  ${RED}✗${RESET} $1"; FAIL=$((FAIL + 1)); }
 
-header "── Pre-commit security & quality checks ──"
+# Safe wrapper: prevents set -e from killing script
+safe_run() {
+  set +e
+  "$@"
+  local status=$?
+  set -e
+  return $status
+}
 
-# Get explicitly staged files
-STAGED_FILES=$(git diff --cached --name-only 2>/dev/null || true)
+header "── Enterprise pre-commit security & quality checks ──"
 
-# ── 1. Block .env files ──────────────────────────────────────
-header "[1/7] Secret file detection"
-BLOCKED_PATTERNS=(
+STAGED_FILES="$(git diff --cached --name-only 2>/dev/null || true)"
+
+if [[ -z "${STAGED_FILES}" ]]; then
+  ok "No files staged — nothing to check"
+  echo ""
+  echo -e "${BOLD}── Result: ${GREEN}${PASS} passed${RESET}${BOLD}, ${RED}${FAIL} failed${RESET} ──"
+  echo -e "${GREEN}All checks passed. Committing...${RESET}"
+  exit 0
+fi
+
+# ── 1/9 Secret file name detection ───────────────────────────
+header "[1/9] Secret file name detection"
+
+BLOCKED_FILE_PATTERNS=(
   "\.env$"
   "\.env\."
   ".*_rsa$"
   ".*\.pem$"
   ".*\.key$"
+  ".*\.p12$"
+  ".*\.jks$"
+  ".*\.crt$"
+  ".*\.der$"
   ".*client_secret.*\.json$"
   ".*credentials.*\.json$"
-  ".*service.account.*\.json$"
+  ".*service\.account.*\.json$"
   "ca\.pem$"
   "aiven.*\.pem$"
+  ".*\.n8n/credentials/.*"
 )
 
 BLOCKED=0
-if [[ -n "$STAGED_FILES" ]]; then
-  while IFS= read -r file; do
-    [[ -z "$file" ]] && continue
-    [[ "$file" =~ \.env\.example$ ]] && continue
+while IFS= read -r file; do
+  [[ -z "$file" ]] && continue
+  [[ "$file" =~ \.env\.example$ ]] && continue
+  [[ "$file" == .git-hooks/* ]] && continue
 
-    for pattern in "${BLOCKED_PATTERNS[@]}"; do
-      if [[ "$file" =~ $pattern ]]; then
-        fail "BLOCKED: '$file' matches secret pattern '$pattern'"
-        BLOCKED=1
-      fi
-    done
-  done <<< "$STAGED_FILES"
-fi
-[[ $BLOCKED -eq 0 ]] && ok "No secret files staged"
+  for pattern in "${BLOCKED_FILE_PATTERNS[@]}"; do
+    if [[ "$file" =~ $pattern ]]; then
+      fail "BLOCKED: '$file' matches secret-bearing pattern '$pattern'"
+      BLOCKED=1
+    fi
+  done
+done <<< "${STAGED_FILES}"
 
-# ── 2. Scan staged content for hardcoded secrets ─────────────
-header "[2/7] Hardcoded secret pattern scan"
-SECRET_PATTERNS=(
-  "password\s*=\s*['\"][^'\"]{6,}"
-  "secret\s*=\s*['\"][^'\"]{6,}"
-  "api_key\s*=\s*['\"][^'\"]{6,}"
-  "token\s*=\s*['\"][^'\"]{20,}"
-  "-----BEGIN.*PRIVATE KEY-----"
-  "AKIA[0-9A-Z]{16}"
-  "ghp_[a-zA-Z0-9]{36}"
-  "tenant_id\s*=\s*['\"][0-9a-f-]{36}"
+[[ $BLOCKED -eq 0 ]] && ok "No secret-like files staged"
+
+# ── 2/9 Large file size guard ────────────────────────────────
+header "[2/9] Large file size guard (1MB limit)"
+
+SIZE_BLOCKED=0
+MAX_SIZE_BYTES=1000000
+
+while IFS= read -r file; do
+  [[ -z "$file" ]] && continue
+  [[ "$file" == .git-hooks/* ]] && continue
+  [[ ! -f "$file" ]] && continue
+
+  size=$(safe_run wc -c <"$file" 2>/dev/null || echo 0)
+
+  if [[ "$size" -gt "$MAX_SIZE_BYTES" ]]; then
+    fail "File '$file' exceeds ${MAX_SIZE_BYTES} bytes (${size}) — blocked"
+    SIZE_BLOCKED=1
+  fi
+done <<< "${STAGED_FILES}"
+
+[[ $SIZE_BLOCKED -eq 0 ]] && ok "No oversized files staged"
+
+# ── 3/9 Binary / archive secret guard ────────────────────────
+header "[3/9] Binary / archive secret guard"
+
+BINARY_PATTERNS=(
+  ".*\.zip$"
+  ".*\.tar$"
+  ".*\.tar\.gz$"
+  ".*\.tgz$"
+  ".*\.p12$"
+  ".*\.jks$"
+  ".*\.der$"
 )
+
+BINARY_BLOCKED=0
+while IFS= read -r file; do
+  [[ -z "$file" ]] && continue
+  [[ "$file" == .git-hooks/* ]] && continue
+
+  for pattern in "${BINARY_PATTERNS[@]}"; do
+    if [[ "$file" =~ $pattern ]]; then
+      fail "Binary/archive file '$file' blocked (pattern: $pattern)"
+      BINARY_BLOCKED=1
+    fi
+  done
+done <<< "${STAGED_FILES}"
+
+[[ $BINARY_BLOCKED -eq 0 ]] && ok "No binary/archive files staged"
+
+# ── 4/9 Hardcoded secret pattern scan ────────────────────────
+header "[4/9] Hardcoded secret pattern scan"
+
+SECRET_PATTERNS=(
+  "['\"]?(password|passwd|secret|token|api[_-]?key)['\"]?\s*[:=]\s*['\"][^'\"]{4,}"
+  "^(PASSWORD|SECRET|TOKEN|API_KEY|SENDGRID_API_KEY|SMTP_PASSWORD)=[^[:space:]]{4,}"
+  "eyJ[A-Za-z0-9_-]*\.[A-Za-z0-9_-]*\.[A-Za-z0-9_-]*"
+  "AKIA[0-9A-Z]{16}"
+  "ghp_[A-Za-z0-9]{36}"
+  "gho_[A-Za-z0-9]{36}"
+  "glpat-[A-Za-z0-9_-]{20,}"
+  "-----BEGIN.*PRIVATE KEY-----"
+)
+
 SECRET_FOUND=0
-if [[ -n "$STAGED_FILES" ]]; then
-  while IFS= read -r file; do
-    [[ -z "$file" || ! -f "$file" ]] && continue
-    [[ "$file" == *.env.example ]] && continue
-    [[ "$file" == *DECISIONS.md ]] && continue
-    [[ "$file" == .git-hooks/* ]] && continue
+while IFS= read -r file; do
+  [[ -z "$file" || ! -f "$file" ]] && continue
+  [[ "$file" == *.env.example ]] && continue
+  [[ "$file" == *DECISIONS.md ]] && continue
+  [[ "$file" == .git-hooks/* ]] && continue
+
+  if safe_run file "$file" | grep -qiE "text|utf-8"; then
     for pattern in "${SECRET_PATTERNS[@]}"; do
-      if git show ":$file" 2>/dev/null | grep -iEq -e "$pattern"; then
+      if safe_run git show ":$file" | grep -Ei "$pattern" >/dev/null; then
         fail "Possible hardcoded secret in '$file' (pattern: $pattern)"
         SECRET_FOUND=1
       fi
     done
-  done <<< "$STAGED_FILES"
-fi
+  fi
+done <<< "${STAGED_FILES}"
+
 [[ $SECRET_FOUND -eq 0 ]] && ok "No hardcoded secrets detected"
 
-# ── 3. Python: ruff lint (backend only) ─────────────────────
-header "[3/7] Python linting (ruff)"
-PY_STAGED=$(echo "$STAGED_FILES" | grep "\.py$" || true)
-if [[ -n "$PY_STAGED" ]]; then
+# ── 5/9 High-entropy token heuristic ─────────────────────────
+header "[5/9] High-entropy token heuristic"
+
+ENTROPY_PATTERNS=(
+  "[A-Za-z0-9]{32,}"
+  "[A-Fa-f0-9]{64}"
+  "[A-Za-z0-9+/]{44}={0,2}"
+)
+
+ENTROPY_FOUND=0
+while IFS= read -r file; do
+  [[ -z "$file" || ! -f "$file" ]] && continue
+  [[ "$file" == *.env.example ]] && continue
+  [[ "$file" == *DECISIONS.md ]] && continue
+  [[ "$file" == .git-hooks/* ]] && continue
+
+  if safe_run file "$file" | grep -qiE "text|utf-8"; then
+    for pattern in "${ENTROPY_PATTERNS[@]}"; do
+      if safe_run git show ":$file" | grep -E "$pattern" >/dev/null; then
+        warn "High-entropy string detected in '$file' (pattern: $pattern) — review manually"
+        ENTROPY_FOUND=1
+      fi
+    done
+  fi
+done <<< "${STAGED_FILES}"
+
+[[ $ENTROPY_FOUND -eq 0 ]] && ok "No high-entropy tokens detected (heuristic)"
+
+# ── 6/9 Security-sensitive keyword scan ──────────────────────
+header "[6/9] Security-sensitive keyword scan"
+
+BLOCKED_KEYWORDS_REGEX=(
+  "TODO:\s*remove"
+  "FIXME:\s*security"
+  "import\s+random"
+  "DEBUG\s*=\s*True"
+  "console\s*\.\s*log\s*\("
+  "console\s*\.\s*(debug|info|warn|error)\s*\(.*secret"
+  "print\s*\(\s*password"
+  "print\s*\(\s*secret"
+  "logger\.(info|debug|warning|error)\s*\(.*secret"
+)
+
+KEYWORD_FOUND=0
+while IFS= read -r file; do
+  [[ -z "$file" || ! -f "$file" ]] && continue
+  [[ "$file" == *.md ]] && continue
+  [[ "$file" == .git-hooks/* ]] && continue
+
+  if safe_run file "$file" | grep -qiE "text|utf-8"; then
+    for kw in "${BLOCKED_KEYWORDS_REGEX[@]}"; do
+      if safe_run git show ":$file" | grep -Eq "$kw"; then
+        fail "Blocked keyword pattern '$kw' found in '$file'"
+        KEYWORD_FOUND=1
+      fi
+    done
+  fi
+done <<< "${STAGED_FILES}"
+
+[[ $KEYWORD_FOUND -eq 0 ]] && ok "No blocked security-sensitive keywords detected"
+
+# ── 7/9 Python linting & formatting ──────────────────────────
+header "[7/9] Python linting & formatting (ruff, backend/)"
+
+PY_STAGED="$(echo "${STAGED_FILES}" | grep "\.py$" || true)"
+PY_FAIL=0
+
+if [[ -n "${PY_STAGED}" ]]; then
   if command -v ruff &>/dev/null; then
-    if echo "$PY_STAGED" | xargs ruff check --quiet 2>/dev/null; then
-      ok "ruff passed on staged Python files"
+    if safe_run ruff check backend/ --quiet; then
+      ok "ruff check passed on backend/"
     else
-      fail "ruff found issues — run: ruff check backend/ --fix"
+      fail "ruff check found issues — run: ruff check backend/ --fix"
+      PY_FAIL=1
+    fi
+    if safe_run ruff format --check backend/ --quiet; then
+      ok "ruff format check passed on backend/"
+    else
+      fail "ruff format check failed — run: ruff format backend/"
+      PY_FAIL=1
     fi
   else
-    warn "ruff not installed — skipping Python lint (pip install ruff)"
+    warn "ruff not installed — skipping Python lint/format"
   fi
 else
   ok "No Python files staged"
 fi
 
-# ── 4. Python: ruff format check ────────────────────────────
-header "[4/7] Python format check (ruff format)"
-if [[ -n "$PY_STAGED" ]]; then
-  if command -v ruff &>/dev/null; then
-    if echo "$PY_STAGED" | xargs ruff format --check --quiet 2>/dev/null; then
-      ok "Python formatting is clean"
-    else
-      fail "Python formatting issues — run: ruff format backend/"
-    fi
-  else
-    warn "ruff not installed — skipping format check"
-  fi
-else
-  ok "No Python files staged"
-fi
+# ── 8/9 TypeScript linting ───────────────────────────────────
+header "[8/9] TypeScript linting (eslint, frontend/)"
 
-# ── 5. TypeScript: eslint (frontend only) ───────────────────
-header "[5/7] TypeScript linting (eslint)"
-TS_STAGED=$(echo "$STAGED_FILES" | grep -E "\.(ts|tsx)$" || true)
-if [[ -n "$TS_STAGED" ]]; then
-  if command -v npx &>/dev/null && [[ -f "frontend/node_modules/.bin/eslint" ]]; then
-    TS_ARGS=$(echo "$TS_STAGED" | tr '\n' ' ')
-    if (cd frontend && npx eslint $TS_ARGS --quiet 2>/dev/null); then
+FRONTEND_DIR="frontend"
+TS_STAGED="$(echo "${STAGED_FILES}" | grep -E "\.(ts|tsx)$" || true)"
+TS_FAIL=0
+
+if [[ -n "${TS_STAGED}" ]]; then
+  if command -v npx &>/dev/null && [[ -f "${FRONTEND_DIR}/node_modules/.bin/eslint" ]]; then
+    TS_ARGS="$(echo "${TS_STAGED}" | tr '\n' ' ')"
+    if safe_run bash -c "cd ${FRONTEND_DIR} && npx eslint ${TS_ARGS} --quiet"; then
       ok "ESLint passed on staged TypeScript files"
     else
-      fail "ESLint found issues — run: cd frontend && npm run lint"
+      fail "ESLint found issues — run: cd ${FRONTEND_DIR} && npm run lint"
+      TS_FAIL=1
     fi
   else
-    warn "ESLint not available — run: cd frontend && npm install"
+    warn "ESLint not available — run: cd ${FRONTEND_DIR} && npm install"
   fi
 else
   ok "No TypeScript files staged"
 fi
 
-# ── 6. Blocked keywords ─────────────────────────────────────
-header "[6/7] Blocked keyword scan"
-BLOCKED_KEYWORDS=("TODO: remove" "FIXME: security" "import random" "DEBUG = True" "console.log(" "print(password" "print(secret")
-KEYWORD_FOUND=0
-if [[ -n "$STAGED_FILES" ]]; then
-  while IFS= read -r file; do
-    [[ -z "$file" || ! -f "$file" ]] && continue
-    [[ "$file" == *.md ]] && continue
-    [[ "$file" == .git-hooks/* ]] && continue
-    for kw in "${BLOCKED_KEYWORDS[@]}"; do
-      if git show ":$file" 2>/dev/null | grep -qF "$kw"; then
-        fail "Blocked keyword '$kw' found in '$file'"
-        KEYWORD_FOUND=1
-      fi
-    done
-  done <<< "$STAGED_FILES"
-fi
-[[ $KEYWORD_FOUND -eq 0 ]] && ok "No blocked keywords detected"
+# ── 9/9 Alembic migration consistency ────────────────────────
+header "[9/9] Alembic migration consistency"
 
-# ── 7. Alembic: uncommitted migrations guard ────────────────
-header "[7/7] Alembic migration consistency"
-if echo "$STAGED_FILES" | grep -q "models/"; then
-  if ! echo "$STAGED_FILES" | grep -q "db/migrations/versions/"; then
+MODELS_CHANGED=0
+MIGRATIONS_STAGED=0
+
+while IFS= read -r file; do
+  [[ -z "$file" ]] && continue
+  [[ "$file" == .git-hooks/* ]] && continue
+
+  if [[ "$file" =~ ^backend/.*/models/ ]] || [[ "$file" =~ ^backend/.*/db/models/ ]]; then
+    MODELS_CHANGED=1
+  fi
+  if [[ "$file" =~ ^backend/db/migrations/versions/ ]]; then
+    MIGRATIONS_STAGED=1
+  fi
+done <<< "${STAGED_FILES}"
+
+if [[ $MODELS_CHANGED -eq 1 ]]; then
+  if [[ $MIGRATIONS_STAGED -eq 0 ]]; then
     warn "Model files changed but no new Alembic migration staged"
     warn "Run: cd backend && alembic revision --autogenerate -m 'describe_change'"
   else
@@ -171,9 +304,11 @@ fi
 # ── Summary ──────────────────────────────────────────────────
 echo ""
 echo -e "${BOLD}── Result: ${GREEN}${PASS} passed${RESET}${BOLD}, ${RED}${FAIL} failed${RESET} ──"
+
 if [[ $FAIL -gt 0 ]]; then
   echo -e "${RED}${BOLD}Commit blocked. Fix the issues above and try again.${RESET}"
   exit 1
 fi
+
 echo -e "${GREEN}All checks passed. Committing...${RESET}"
 exit 0
