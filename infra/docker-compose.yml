@@ -22,7 +22,7 @@ services:
         condition: service_healthy
     restart: unless-stopped
     mem_limit: 512m
-    command: uvicorn main:app --host 0.0.0.0 --port 8000 --reload
+    command: sh -c "python seed.py && uvicorn main:app --host 0.0.0.0 --port 8000 --reload"
 
 #  n8n:
 #    image: n8nio/n8n:latest
