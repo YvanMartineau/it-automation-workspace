@@ -46,7 +46,19 @@ async def seed_admin_user() -> None:
         await db.commit()
         print(f"✓ Created admin user: {admin_email}")
 
+# Example idempotent check inside seed.py
+async def seed_data(db_session):
+    existing_user = await db_session.execute(
+        select(User).where(User.email == "admin@example.com")
+    )
+    if not existing_user.scalar_one_or_none():
+        db_session.add(User(email="admin@example.com", name="Admin"))
+        await db_session.commit()
+        print("Seed completed.")
+    else:
+        print("Data already seeded. Skipping.")
 
+        
 async def main() -> None:
     await seed_admin_user()
 

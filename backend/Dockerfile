@@ -14,10 +14,14 @@ COPY requirements.txt .
 RUN pip install --no-cache-dir -r requirements.txt
 
 COPY . .
+#For the Alembic migrations and the seed data
+COPY entrypoint.sh /app/entrypoint.sh
 
 # Do not run as root — security requirement
 RUN useradd -m -u 1001 appuser && chown -R appuser /app
 USER appuser
+
+ENTRYPOINT ["/bin/sh", "/app/entrypoint.sh"]
 
 EXPOSE 8000
 CMD ["uvicorn", "main:app", "--host", "0.0.0.0", "--port", "8000"]
