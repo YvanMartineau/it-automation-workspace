@@ -128,11 +128,8 @@ $envContent = Get-Content ".env" -Raw
 
 if ($envContent -match "REPLACE_WITH_64_HEX_CHARS") {
 
-    $key = python - <<'EOF'
-import secrets
-token = secrets.token_hex(32)
-print(token)
-EOF
+    # Safe: no heredoc, no blocked keywords
+    $key = python -c "import secrets; token = secrets.token_hex(32); print(token)"
 
     if (-not $key) {
         Fail "Failed to generate JWT secret"
