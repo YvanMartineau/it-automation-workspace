@@ -1,29 +1,29 @@
 # ============================================================
 #  bootstrap.ps1  Windows PowerShell 5.1 / PowerShell 7+
 #  Run once after cloning:  .\scripts\bootstrap.ps1
-#  Run as normal user — no administrator rights required.
+#  Run as normal user - no administrator rights required.
 # ============================================================
 
 $ErrorActionPreference = "Stop"
 
-function Step  { param($t) Write-Host "`n  ▶ $t" -ForegroundColor Cyan }
-function Ok    { param($t) Write-Host "    ✓ $t" -ForegroundColor Green }
-function Warn  { param($t) Write-Host "    ⚠ $t" -ForegroundColor Yellow }
-function Fail  { param($t) Write-Host "    ✗ $t" -ForegroundColor Red; exit 1 }
+function Step  { param($t) Write-Host "`n  > $t" -ForegroundColor Cyan }
+function Ok    { param($t) Write-Host "    OK $t" -ForegroundColor Green }
+function Warn  { param($t) Write-Host "    WARNING $t" -ForegroundColor Yellow }
+function Fail  { param($t) Write-Host "    FAIL $t" -ForegroundColor Red; exit 1 }
 
 $RepoRoot = Split-Path $PSScriptRoot -Parent
 Set-Location $RepoRoot
 
 Write-Host @"
 `n  ╔════════════════════════════════════════╗
-  ║  IT Automation Platform — Bootstrap     ║
+  ║  IT Automation Platform - Bootstrap     ║
   ║  Windows / PowerShell                   ║
   ║  Yvan Martineau                         ║
   ╚════════════════════════════════════════╝`n
 "@ -ForegroundColor White
 
 # ─────────────────────────────────────────────────────────────
-# 1/8 — Prerequisites (hard requirements)
+# 1/8 - Prerequisites (hard requirements)
 # ─────────────────────────────────────────────────────────────
 Step "1/8  Prerequisites"
 
@@ -34,7 +34,7 @@ foreach ($cmd in $Required) {
     if (Get-Command $cmd -ErrorAction SilentlyContinue) {
         Ok "$cmd found"
     } else {
-        Fail "$cmd not found — install before proceeding"
+        Fail "$cmd not found - install before proceeding"
         $Missing++
     }
 }
@@ -45,7 +45,7 @@ if ($Missing -gt 0) {
 
 # uv auto-install (Windows equivalent)
 if (-not (Get-Command uv -ErrorAction SilentlyContinue)) {
-    Warn "uv not found — installing uv automatically from astral.sh..."
+    Warn "uv not found - installing uv automatically from astral.sh..."
 
     try {
         Invoke-WebRequest -Uri "https://astral.sh/uv/install.ps1" -UseBasicParsing | Invoke-Expression
@@ -56,7 +56,7 @@ if (-not (Get-Command uv -ErrorAction SilentlyContinue)) {
         }
     }
     catch {
-        Fail "uv installation failed — check network / installer"
+        Fail "uv installation failed - check network / installer"
     }
 } else {
     Ok "uv dependency manager ready"
@@ -67,11 +67,11 @@ $nodeVer = (node -v 2>$null) -replace "v",""
 if ([int]($nodeVer.Split(".")[0]) -ge 20) {
     Ok "Node.js ≥ 20"
 } else {
-    Warn "Node.js < 20 ($nodeVer) — upgrade recommended"
+    Warn "Node.js < 20 ($nodeVer) - upgrade recommended"
 }
 
 # ─────────────────────────────────────────────────────────────
-# 2/8 — Git repository
+# 2/8 - Git repository
 # ─────────────────────────────────────────────────────────────
 Step "2/8  Git repository"
 
@@ -86,20 +86,20 @@ try { git checkout -b main 2>$null } catch {}
 try { git checkout main 2>$null } catch {}
 
 # ─────────────────────────────────────────────────────────────
-# 3/8 — Git hooks (secure presence check)
+# 3/8 - Git hooks (secure presence check)
 # ─────────────────────────────────────────────────────────────
 Step "3/8  Git hooks"
 
 git config core.hooksPath .git-hooks
 
 if (-not (Test-Path ".git-hooks/pre-commit")) {
-    Fail "Missing .git-hooks/pre-commit — security pre-commit hook not installed"
+    Fail "Missing .git-hooks/pre-commit - security pre-commit hook not installed"
 }
 
-Ok "Hooks linked from .git-hooks/ — core.hooksPath set"
+Ok "Hooks linked from .git-hooks/ - core.hooksPath set"
 
 # ─────────────────────────────────────────────────────────────
-# 4/8 — .env (ensure git-ignore before creation)
+# 4/8 - .env (ensure git-ignore before creation)
 # ─────────────────────────────────────────────────────────────
 Step "4/8  Environment file"
 
@@ -107,20 +107,20 @@ Step "4/8  Environment file"
 $ignoreCheck = git check-ignore .env 2>$null
 
 if (-not $ignoreCheck) {
-    Fail ".env is not ignored by git — add '.env' to .gitignore before proceeding"
+    Fail ".env is not ignored by git - add '.env' to .gitignore before proceeding"
 }
 
 Ok ".env is ignored by git"
 
 if (Test-Path ".env") {
-    Warn ".env already exists — not overwriting"
+    Warn ".env already exists - not overwriting"
 } else {
     Copy-Item ".env.example" ".env"
-    Ok ".env created — fill in all REPLACE_ values before running docker compose"
+    Ok ".env created - fill in all REPLACE_ values before running docker compose"
 }
 
 # ─────────────────────────────────────────────────────────────
-# 5/8 — JWT secret auto-fill (safe version, no blocked keywords)
+# 5/8 - JWT secret auto-fill (safe version, no blocked keywords)
 # ─────────────────────────────────────────────────────────────
 Step "5/8  JWT secret"
 
@@ -140,11 +140,11 @@ if ($envContent -match "REPLACE_WITH_64_HEX_CHARS") {
 
     Ok "JWT_SECRET_KEY auto-generated (64 hex chars) and written to .env"
 } else {
-    Ok "JWT_SECRET_KEY already set — not modifying"
+    Ok "JWT_SECRET_KEY already set - not modifying"
 }
 
 # ─────────────────────────────────────────────────────────────
-# 6/8 — Python venv via uv (Python 3.12)
+# 6/8 - Python venv via uv (Python 3.12)
 # ─────────────────────────────────────────────────────────────
 Step "6/8  Python virtual environment (backend via uv)"
 
@@ -162,7 +162,7 @@ uv pip sync backend\requirements.txt --python backend\.venv\Scripts\python.exe -
 Ok "Backend dependencies installed securely via uv"
 
 # ─────────────────────────────────────────────────────────────
-# 7/8 — Frontend deps
+# 7/8 - Frontend deps
 # ─────────────────────────────────────────────────────────────
 Step "7/8  Frontend (npm install)"
 
@@ -176,7 +176,7 @@ if (Test-Path "frontend\node_modules") {
 }
 
 # ─────────────────────────────────────────────────────────────
-# 8/8 — Initial commit (keeps --no-verify)
+# 8/8 - Initial commit (keeps --no-verify)
 # ─────────────────────────────────────────────────────────────
 Step "8/8  Initial commit"
 
