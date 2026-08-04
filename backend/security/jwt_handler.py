@@ -7,11 +7,13 @@ Stateless design — to "invalidate" a session, the client deletes the refresh c
 """
 from datetime import datetime, timedelta, timezone
 from uuid import UUID
+from enum import Enum
 
 from fastapi import Depends, HTTPException, status
 from fastapi.security import OAuth2PasswordBearer
-from jose import JWTError, jwt
+from jose import ExpiredSignatureError, JWTError, jwt
 from sqlalchemy import select
+from sqlalchemy.ext.asyncio import AsyncSession
 
 from db.engine import get_db
 from models.user import User
@@ -60,29 +62,38 @@ def create_refresh_token(user_id: UUID) -> str:
 
 
 def decode_token(token: str, expected_type: str) -> TokenPayload:
-    """Raises HTTPException(401) on any failure — expired, malformed, wrong secret, wrong type."""
-    credentials_exception = HTTPException(
-        status_code=status.HTTP_401_UNAUTHORIZED,
-        detail="Could not validate credentials",
-        headers={"WWW-Authenticate": "Bearer"}, # this headers is used to verify the signature of the token and to check if the token is expired or not. If the token is invalid, it will return a 401 error with this header.
-    )
+    """Decodes token and raises granular 401 exceptions on failures."""
     try:
         payload = jwt.decode(
             token,
             settings.JWT_SECRET_KEY,
             algorithms=[settings.JWT_ALGORITHM],
         )
+    except ExpiredSignatureError:
+        raise HTTPException(
+            status_code=status.HTTP_401_UNAUTHORIZED,
+            detail="Token has expired",
+            headers={"WWW-Authenticate": "Bearer"},
+        )
     except JWTError:
-        raise credentials_exception
+        raise HTTPException(
+            status_code=status.HTTP_401_UNAUTHORIZED,
+            detail="Could not validate credentials",
+            headers={"WWW-Authenticate": "Bearer"},
+        )
 
-    sub = payload.get("sub")
-    token_type = payload.get("type")
-    exp = payload.get("exp")
+    sub: str | None = payload.get("sub")
+    token_type: str | None = payload.get("type")
+    exp: int | None = payload.get("exp")
 
-    if sub is None or token_type != expected_type:
-        raise credentials_exception
+    if not sub or token_type != expected_type:
+        raise HTTPException(
+            status_code=status.HTTP_401_UNAUTHORIZED,
+            detail=f"Invalid token type. Expected '{expected_type}'",
+            headers={"WWW-Authenticate": "Bearer"},
+        )
 
-    return TokenPayload(sub=sub, token_type=token_type, exp=exp)
+    return TokenPayload(sub=sub, token_type=token_type, exp=exp or 0)
 
 
 async def get_current_user(
@@ -115,7 +126,10 @@ async def get_current_user(
 
 
 async def get_admin_user(current_user: User = Depends(get_current_user)) -> User:
-    if current_user.role != "admin":
+    """Robust admin check handling both raw string values and Python/SQLAlchemy Enums."""
+    role_value = current_user.role.value if isinstance(current_user.role, Enum) else str(current_user.role)
+    
+    if role_value.lower() != "admin":
         raise HTTPException(
             status_code=status.HTTP_403_FORBIDDEN,
             detail="Admin privileges required",

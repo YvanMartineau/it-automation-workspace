@@ -60,14 +60,14 @@ pwd_context = CryptContext(schemes=["bcrypt"], deprecated="auto")
 async def _seed_users(db) -> dict[str, User]:
     admin = User(
         id=uuid.uuid4(),
-        email="admin@demo.local",
+        email="admin@dev.de",
         hashed_password=pwd_context.hash("DemoAdmin!2026"), #("DemoViewer!2026"[:72]) 72 bit
         role="admin",
         is_active=True,
     )
     viewer = User(
         id=uuid.uuid4(),
-        email="viewer@demo.local",
+        email="viewer@dev.de",
         hashed_password=pwd_context.hash("DemoViewer!2026"),
         role="viewer",
         is_active=True,

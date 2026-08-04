@@ -9,6 +9,7 @@ from fastapi.middleware.cors import CORSMiddleware
 from slowapi import _rate_limit_exceeded_handler
 from slowapi.errors import RateLimitExceeded
 
+from core.exceptions import setup_exception_handlers
 from settings import get_settings
 from security.rate_limiter import limiter
 # from services.scheduler import start_scheduler, stop_scheduler
@@ -36,6 +37,7 @@ def create_app() -> FastAPI:
     )
 
     app.state.limiter = limiter
+    setup_exception_handlers(app)
     app.add_exception_handler(RateLimitExceeded, _rate_limit_exceeded_handler)
 
     app.add_middleware(

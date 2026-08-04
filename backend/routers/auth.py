@@ -6,6 +6,8 @@ POST /auth/logout   — clear refresh cookie (stateless: nothing to revoke serve
 from fastapi import APIRouter, Depends, HTTPException, Request, Response, status
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
+from sqlalchemy.exc import SQLAlchemyError
+from fastapi.concurrency import run_in_threadpool
 
 from db.engine import get_db
 from models.user import User
@@ -22,6 +24,10 @@ REFRESH_COOKIE_NAME = "refresh_token"
 REFRESH_COOKIE_MAX_AGE = settings.REFRESH_TOKEN_EXPIRE_DAYS * 24 * 60 * 60
 
 
+# Dummy hash used to mitigate timing attacks when a user is not found in the DB.
+# Pre-computed bcrypt hash for standard execution timing consistency.
+DUMMY_HASH = "$2b$12$eA3Vqb3j0zQ4yY1hZ.vQ7.bH9.3b3j0zQ4yY1hZ.vQ7.bH9.3b3j0"
+
 def _set_refresh_cookie(response: Response, token: str) -> None:
     response.set_cookie(
         key=REFRESH_COOKIE_NAME,
@@ -30,7 +36,7 @@ def _set_refresh_cookie(response: Response, token: str) -> None:
         secure=True,
         samesite="strict",
         max_age=REFRESH_COOKIE_MAX_AGE,
-        path="/auth",  # scope the cookie to auth endpoints only
+        path="/auth",
     )
 
 
@@ -52,7 +58,24 @@ async def login(
         detail="Invalid email or password",
     )
 
-    if user is None or not verify_password(body.password, user.hashed_password):
+    try:
+        result = await db.execute(select(User).where(User.email == body.email))
+        user = result.scalar_one_or_none()
+    except SQLAlchemyError as err:
+        # Prevents 500 unhandled leaks when DB is uninitialized or unreachable
+        raise HTTPException(
+            status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
+            detail="Database service unavailable during authentication"
+        ) from err
+
+
+    # Constant-time computation: Always run password verification even if user doesn't exist.
+    # Offloaded to threadpool to prevent blocking the async event loop.
+    target_hash = user.hashed_password if user is not None else DUMMY_HASH
+    is_password_valid = await run_in_threadpool(verify_password, body.password, target_hash)
+    
+    
+    if user is None or not is_password_valid:
         # TODO once AuditLog model exists: write_audit_log(actor=body.email, action="auth.login.failed")
         raise invalid_credentials
 
@@ -64,7 +87,7 @@ async def login(
     _set_refresh_cookie(response, refresh_token)
 
     # TODO once AuditLog model exists: write_audit_log(actor=user.email, action="auth.login")
-
+    # Skip all Auditlog for the moment.
     return TokenResponse(access_token=access_token)
 
 
