@@ -16,7 +16,8 @@ services:
       - ../backend:/app
     #Added environment variable for database connection
     environment:
-      - DATABASE_URL=postgresql://dev:dev@postgres_local:5432/automation_dev  
+      - DATABASE_URL=postgresql+asyncpg://dev:dev@postgres_local:5432/automation_dev  
+      - DEV_DATABASE_URL=postgresql+asyncpg://dev:dev@postgres_local:5432/automation_dev
     depends_on:
       postgres_local:
         condition: service_healthy

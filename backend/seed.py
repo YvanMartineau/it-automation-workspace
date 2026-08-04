@@ -17,12 +17,12 @@ from datetime import datetime, timedelta, timezone
 from passlib.context import CryptContext
 from sqlalchemy import delete
 
-from backend.db.engine import AsyncSessionLocal, engine
-from backend.models.user import User
-from backend.models.device import Device
-from backend.models.audit_log import AuditLog
-from backend.models.report_log import ReportLog
-from backend.settings import settings
+from db.engine import AsyncSessionLocal, engine
+from models.user import User
+from models.device import Device
+#from .models.audit_log import AuditLog
+#from .models.report_log import ReportLog
+from settings import Settings
 
 pwd_context = CryptContext(schemes=["bcrypt"], deprecated="auto")
 
@@ -33,11 +33,11 @@ pwd_context = CryptContext(schemes=["bcrypt"], deprecated="auto")
 #    This is the check that saves you from truncating your live demo DB
 #    by running `python -m backend.seed` on the wrong terminal tab.
 #    """
-#    is_local = "localhost" in settings.DATABASE_URL or "127.0.0.1" in settings.DATABASE_URL
+#    is_local = "localhost" in settings.DEV_DATABASE_URL or "127.0.0.1" in settings.DEV_DATABASE_URL
 #    if not is_local and "--confirm-prod" not in sys.argv:
 #        print(
 #            "REFUSING TO RUN: DATABASE_URL does not look local "
-#            f"({settings.DATABASE_URL.split('@')[-1].split('/')[0]}).\n"
+#            f"({settings.DEV_DATABASE_URL.split('@')[-1].split('/')[0]}).\n"
 #            "If you really mean to seed a remote DB, re-run with --confirm-prod."
 #        )
 #        sys.exit(1)
@@ -61,7 +61,7 @@ async def _seed_users(db) -> dict[str, User]:
     admin = User(
         id=uuid.uuid4(),
         email="admin@demo.local",
-        hashed_password=pwd_context.hash("DemoAdmin!2026"),
+        hashed_password=pwd_context.hash("DemoAdmin!2026"), #("DemoViewer!2026"[:72]) 72 bit
         role="admin",
         is_active=True,
     )
