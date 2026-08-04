@@ -3,12 +3,14 @@ Centralised settings via pydantic-settings.
 App will NOT start if any required env var is missing.
 All secrets come from environment — never hardcoded.
 """
+from pathlib import Path
 from functools import lru_cache
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
+ENV_FILE_PATH = Path(__file__).resolve().parent.parent / ".env"
 
 class Settings(BaseSettings):
-    model_config = SettingsConfigDict(env_file=".env", extra="ignore")
+    model_config = SettingsConfigDict(env_file=ENV_FILE_PATH, extra="ignore")
 
     # Database
     DATABASE_URL: str

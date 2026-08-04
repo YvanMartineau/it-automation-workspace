@@ -135,4 +135,32 @@
 
 ---
 
+## ADR-009 — Platform User Bootstrapping & Provisioning
+**Date:** ...
+**Status:** Accepted
+
+**Context:** The system needs at least one authenticated operator to demonstrate the dashboard and trigger onboarding. Subsequent operators should be created through the same governed onboarding process rather than a separate admin UI.
+
+**Decision:**
+1. Initial platform administrator is created exclusively via database seed (run once at first deployment / local setup). This seed user has the highest privilege role (`platform_admin`).
+2. When the onboarding form is submitted with a role belonging to the operator set (`IT Support`, `HR`, `System Administrator`), the FastAPI control plane:
+   - Creates the simulated organisational identity (Samba groups, temporary password, etc.) as usual.
+   - **Additionally** creates a corresponding platform user account with a constrained role (`operator` or `viewer` according to policy).
+   - Never grants `platform_admin` through the automated path.
+3. Platform user creation is an explicit, audited step inside the FastAPI transaction / saga, not a side-effect hidden inside n8n.
+4. The temporary password for the platform account is delivered through the same secure channel as the organisational account (or a separate one-time link). Password is never stored in clear text after initial set.
+
+**Rationale:**
+- Solves the bootstrap problem cleanly.
+- Keeps the onboarding flow as the single source of truth for identity.
+- Demonstrates least-privilege: only the seed user is `platform_admin`; all subsequent operators are created with reduced rights.
+- Maintains full auditability and correlation IDs across both identity domains.
+
+**Consequences:**
+- Role-to-platform-permission mapping must be defined in configuration (not hard-coded).
+- An optional approval gate can later be inserted before platform-user creation without redesigning the flow.
+- Seed script must be documented as a one-time, destructive operation that is never run in a shared demo environment after initial setup.
+
+---
+
 *Add entries as you build. Every significant choice — including ones you reverse — belongs here.*

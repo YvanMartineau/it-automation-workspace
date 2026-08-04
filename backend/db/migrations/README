@@ -1,5 +1,1 @@
-Alembic migrations directory.
-Run: alembic revision --autogenerate -m "description"
-Run: alembic upgrade head
-ALWAYS review generated migration file before running upgrade.
-Autogenerate misses: custom triggers, JSONB defaults, partial indexes.
+Generic single-database configuration with an async dbapi.

@@ -1,17 +1,30 @@
-"""JWT token creation, decoding, and get_current_user dependency."""
+# jwt_handler.py
 """
 JWT creation, decoding, and auth dependencies.
-Access tokens: short-lived (15 min), sent via Authorization header, never persisted.
-Refresh tokens: long-lived (7 days), sent via httpOnly cookie, never persisted server-side.
+Access tokens: short-lived (e.g. 15 min), sent via Authorization header, never persisted.
+Refresh tokens: longer-lived (e.g. 7 days), sent via httpOnly cookie, never persisted server-side.
 Stateless design — to "invalidate" a session, the client deletes the refresh cookie.
+
+Layering note: decode_token() and _create_token() are pure token logic and
+raise plain exceptions (TokenExpiredError / TokenInvalidError) — no FastAPI
+or HTTPException in sight. That's what lets services/auth_service.py call
+decode_token() directly and catch a specific, HTTP-agnostic exception type
+instead of an HTTPException it then has to re-wrap or accidentally leak to
+a caller. get_current_user() and get_admin_user() are FastAPI dependencies
+— they legitimately live in the HTTP layer, so they're the only place in
+this file that raises HTTPException.
 """
+
 from datetime import datetime, timedelta, timezone
+from enum import Enum
 from uuid import UUID
 
 from fastapi import Depends, HTTPException, status
 from fastapi.security import OAuth2PasswordBearer
-from jose import JWTError, jwt
+from jose import ExpiredSignatureError, JWTError, jwt
 from sqlalchemy import select
+from sqlalchemy.exc import SQLAlchemyError
+from sqlalchemy.ext.asyncio import AsyncSession
 
 from db.engine import get_db
 from models.user import User
@@ -20,25 +33,37 @@ from settings import get_settings
 settings = get_settings()
 
 # Points Swagger UI at /auth/login for the "Authorize" button.
-# We don't use OAuth2PasswordRequestForm — just reuse this for token extraction.
-oauth2_scheme = OAuth2PasswordBearer(tokenUrl="/auth/login", auto_error=False) #auto_error=False means that if the token is not provided, it will return None instead of raising an error. This allows us to handle the case where the user is not authenticated and provide a custom error message.
+# auto_error=False lets us return a controlled 401 instead of framework-generated errors.
+oauth2_scheme = OAuth2PasswordBearer(tokenUrl="/auth/login", auto_error=False)
 
-#Describes the payload of the decoded JWT token.
+
+class TokenError(Exception):
+    """Base class for JWT validation failures. Callers can catch this broadly or the specific subtypes below."""
+
+
+class TokenExpiredError(TokenError):
+    """Raised when a token's signature is valid but its exp claim has passed."""
+
+
+class TokenInvalidError(TokenError):
+    """Raised for malformed tokens, bad signatures, missing claims, or a token-type mismatch."""
+
+
 class TokenPayload:
-    """Decoded, validated claims — not a Pydantic model, just an internal carrier."""
+    """Decoded, validated claims — internal carrier, not a Pydantic model."""
     def __init__(self, sub: str, token_type: str, exp: int):
-        self.sub = sub  #the subject of the token, usually the user ID (str(UUID))
-        self.token_type = token_type    #"access" or "refresh" — prevents token-type confusion
-        self.exp = exp  #the expiration time of the token, as a Unix timestamp (int)
+        self.sub = sub          # subject (user ID as str(UUID))
+        self.token_type = token_type  # "access" or "refresh"
+        self.exp = exp          # expiration as Unix timestamp (int)
 
 
 def _create_token(subject: str, expires_delta: timedelta, token_type: str) -> str:
     now = datetime.now(timezone.utc)
     payload = {
-        "sub": subject,          # user id (str(UUID))
-        "type": token_type,      # "access" | "refresh" — prevents token-type confusion
-        "iat": now,              # issued at (datetime)
-        "exp": now + expires_delta, # expiration time (datetime) what is timedelta? it is the difference between two datetime objects, representing a duration of time
+        "sub": subject,
+        "type": token_type,
+        "iat": now,
+        "exp": now + expires_delta,
     }
     return jwt.encode(payload, settings.JWT_SECRET_KEY, algorithm=settings.JWT_ALGORITHM)
 
@@ -60,35 +85,46 @@ def create_refresh_token(user_id: UUID) -> str:
 
 
 def decode_token(token: str, expected_type: str) -> TokenPayload:
-    """Raises HTTPException(401) on any failure — expired, malformed, wrong secret, wrong type."""
-    credentials_exception = HTTPException(
-        status_code=status.HTTP_401_UNAUTHORIZED,
-        detail="Could not validate credentials",
-        headers={"WWW-Authenticate": "Bearer"}, # this headers is used to verify the signature of the token and to check if the token is expired or not. If the token is invalid, it will return a 401 error with this header.
-    )
+    """
+    Decode a JWT and enforce token type.
+
+    Raises TokenExpiredError or TokenInvalidError on failure — never
+    HTTPException. Any HTTP-facing caller (see get_current_user below) is
+    responsible for catching these and mapping them to a status code;
+    non-HTTP callers (e.g. auth_service.rotate_access_token) can catch
+    them directly without importing FastAPI at all.
+    """
     try:
         payload = jwt.decode(
             token,
             settings.JWT_SECRET_KEY,
             algorithms=[settings.JWT_ALGORITHM],
         )
-    except JWTError:
-        raise credentials_exception
+    except ExpiredSignatureError as err:
+        raise TokenExpiredError("Token has expired") from err
+    except JWTError as err:
+        raise TokenInvalidError("Could not validate credentials") from err
 
-    sub = payload.get("sub")
-    token_type = payload.get("type")
-    exp = payload.get("exp")
+    sub: str | None = payload.get("sub")
+    token_type: str | None = payload.get("type")
+    exp: int | None = payload.get("exp")
 
-    if sub is None or token_type != expected_type:
-        raise credentials_exception
+    if not sub or token_type != expected_type:
+        raise TokenInvalidError(f"Invalid token type. Expected '{expected_type}'")
 
-    return TokenPayload(sub=sub, token_type=token_type, exp=exp)
+    return TokenPayload(sub=sub, token_type=token_type, exp=exp or 0)
 
 
 async def get_current_user(
     token: str | None = Depends(oauth2_scheme),
-    db=Depends(get_db),
+    db: AsyncSession = Depends(get_db),
 ) -> User:
+    """
+    Dependency to resolve the current authenticated user from an access token.
+    Enforces active status and hides internal lookup details behind 401.
+    This is the HTTP boundary: TokenError from decode_token() is caught
+    here and turned into a controlled 401 response.
+    """
     if token is None:
         raise HTTPException(
             status_code=status.HTTP_401_UNAUTHORIZED,
@@ -96,26 +132,60 @@ async def get_current_user(
             headers={"WWW-Authenticate": "Bearer"},
         )
 
-    payload = decode_token(token, expected_type="access")
+    try:
+        payload = decode_token(token, expected_type="access")
+    except TokenExpiredError:
+        raise HTTPException(
+            status_code=status.HTTP_401_UNAUTHORIZED,
+            detail="Token has expired",
+            headers={"WWW-Authenticate": "Bearer"},
+        )
+    except TokenInvalidError:
+        raise HTTPException(
+            status_code=status.HTTP_401_UNAUTHORIZED,
+            detail="Could not validate credentials",
+            headers={"WWW-Authenticate": "Bearer"},
+        )
 
     try:
         user_id = UUID(payload.sub)
     except ValueError:
-        raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="Invalid token subject")
+        raise HTTPException(
+            status_code=status.HTTP_401_UNAUTHORIZED,
+            detail="Invalid token subject",
+        )
 
-    result = await db.execute(select(User).where(User.id == user_id))
-    user = result.scalar_one_or_none() #scalar_one_or_none() returns the first result of the query, or None if no results were found. If more than one result is found, it raises an exception. This is useful for queries that are expected to return at most one result, such as looking up a user by their unique ID.
+    try:
+        result = await db.execute(select(User).where(User.id == user_id))
+        user = result.scalar_one_or_none()
+    except SQLAlchemyError as err:
+        raise HTTPException(
+            status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
+            detail="Database service unavailable during user resolution",
+        ) from err
 
     if user is None:
-        raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="User not found")
+        raise HTTPException(
+            status_code=status.HTTP_401_UNAUTHORIZED,
+            detail="User not found",
+        )
     if not user.is_active:
-        raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="User is inactive")
+        raise HTTPException(
+            status_code=status.HTTP_401_UNAUTHORIZED,
+            detail="User is inactive",
+        )
 
     return user
 
 
 async def get_admin_user(current_user: User = Depends(get_current_user)) -> User:
-    if current_user.role != "admin":
+    """
+    Dependency enforcing admin-only access.
+    Handles both Enum-based and string-based role representations.
+    """
+    role_value = current_user.role.value if isinstance(current_user.role, Enum) else str(current_user.role)
+
+    if role_value.lower() != "admin":
         raise HTTPException(
             status_code=status.HTTP_403_FORBIDDEN,
             detail="Admin privileges required",

@@ -37,7 +37,8 @@ jobs:
           POSTGRES_DB: automation_test
           POSTGRES_USER: testuser
           POSTGRES_PASSWORD: testpass
-        ports: ["5432:5432"]
+        ports:
+          - 5432:5432
         options: >-
           --health-cmd pg_isready
           --health-interval 10s
@@ -45,17 +46,40 @@ jobs:
           --health-retries 5
     steps:
       - uses: actions/checkout@v4
+
       - uses: actions/setup-python@v5
         with:
           python-version: "3.12"
           cache: "pip"
           cache-dependency-path: backend/requirements.txt
+
       - name: Install dependencies
         run: pip install --upgrade pip && pip install -r backend/requirements.txt
+
       - name: Ruff lint
         run: ruff check backend/
+
       - name: Ruff format check
         run: ruff format backend/ --check
+
+      - name: Ruff lint
+        run: ruff check backend/ --fix
+
+      - name: Wait for PostgreSQL
+        run: |
+          python -c "
+          import socket, time
+          for _ in range(30):
+              try:
+                  with socket.create_connection(('127.0.0.1', 5432), timeout=1):
+                      print('PostgreSQL is up!')
+                      break
+              except OSError:
+                  time.sleep(1)
+          else:
+              raise TimeoutError('PostgreSQL failed to start in time')
+          "
+
       - name: Pytest with coverage
         run: |
           pytest backend/tests/ \
@@ -64,7 +88,7 @@ jobs:
             --cov-report=xml \
             --cov-fail-under=70 -v
         env:
-          TEST_DATABASE_URL: postgresql+asyncpg://testuser:testpass@localhost:5432/automation_test
+          DEV_DATABASE_URL: postgresql+asyncpg://testuser:testpass@127.0.0.1:5432/automation_dev
           JWT_SECRET_KEY: ci-test-secret-key-must-be-32-bytes-longx
           JWT_ALGORITHM: HS256
           ACCESS_TOKEN_EXPIRE_MINUTES: "15"
@@ -84,6 +108,7 @@ jobs:
           ALLOWED_SCAN_SUBNET: 192.168.1.0/24
           APP_ENV: test
           LOG_LEVEL: WARNING
+
       - uses: actions/upload-artifact@v4
         if: always()
         with:
@@ -97,17 +122,22 @@ jobs:
     needs: secret-scan
     steps:
       - uses: actions/checkout@v4
+
       - uses: actions/setup-node@v4
         with:
           node-version: "20"
           cache: "npm"
           cache-dependency-path: frontend/package-lock.json
+
       - run: npm ci
         working-directory: frontend
+
       - run: npm run lint
         working-directory: frontend
+
       - run: npm run typecheck
         working-directory: frontend
+
       - name: Build verification
         run: npm run build
         working-directory: frontend

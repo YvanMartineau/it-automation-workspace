@@ -42,7 +42,7 @@ azure-identity==1.18.0
     # via
     #   -r backend/requirements.txt
     #   msgraph-sdk
-bcrypt==5.0.0
+bcrypt==4.0.1 #was modified from 5.0.0 to 4.0.1 due to compatibility issues with passlib, password was more than 72 bit
     # via -r backend/requirements.txt
 brotli==1.2.0
     # via
@@ -421,7 +421,7 @@ uvicorn==0.30.6
     # via
     #   -r backend/requirements.txt
     #   sse-starlette
-uvloop==0.22.1
+uvloop==0.22.1; sys_platform != "win32"
     # via -r backend/requirements.txt
 watchfiles==1.2.0
     # via -r backend/requirements.txt

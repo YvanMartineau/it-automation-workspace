@@ -1,0 +1,2 @@
+# .gitleaksignore
+.github/workflows/ci.yml

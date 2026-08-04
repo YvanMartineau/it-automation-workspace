@@ -9,11 +9,12 @@ from fastapi.middleware.cors import CORSMiddleware
 from slowapi import _rate_limit_exceeded_handler
 from slowapi.errors import RateLimitExceeded
 
+from core.exceptions import setup_exception_handlers
 from settings import get_settings
 from security.rate_limiter import limiter
 # from services.scheduler import start_scheduler, stop_scheduler
 # from routers import auth, devices, scan, onboard, audit, reports
-from routers import auth
+from routers import auth, devices, audit
 
 settings = get_settings()
 
@@ -36,6 +37,7 @@ def create_app() -> FastAPI:
     )
 
     app.state.limiter = limiter
+    setup_exception_handlers(app)
     app.add_exception_handler(RateLimitExceeded, _rate_limit_exceeded_handler)
 
     app.add_middleware(
@@ -47,10 +49,10 @@ def create_app() -> FastAPI:
     )
 
     app.include_router(auth.router, prefix="/auth", tags=["auth"])
-    # app.include_router(devices.router, prefix="/devices", tags=["devices"])
+    app.include_router(devices.router, prefix="/devices", tags=["devices"])
     # app.include_router(scan.router, prefix="/scan", tags=["scan"])
     # app.include_router(onboard.router, prefix="/onboard", tags=["onboard"])
-    # app.include_router(audit.router, prefix="/audit-logs", tags=["audit"])
+    app.include_router(audit.router, prefix="/audit-logs", tags=["audit"])
     # app.include_router(reports.router, prefix="/reports", tags=["reports"])
 
     @app.get("/health", tags=["health"])
