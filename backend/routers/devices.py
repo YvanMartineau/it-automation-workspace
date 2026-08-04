@@ -1,20 +1,34 @@
+# devices.py
 """
+Device management endpoints:
+
 GET   /devices        — list, filterable by status, paginated
 POST  /devices        — create (admin only), writes audit log
 PATCH /devices/{id}   — partial update (admin only), writes audit log
+
+Route handlers here do only three things: validate input, call
+services/device_service.py, and shape the HTTP response. Query building,
+persistence, and audit logging live in the service layer.
 """
+
 import uuid
 
 from fastapi import APIRouter, Depends, HTTPException, Query, status
-from sqlalchemy import select
-from sqlalchemy.exc import IntegrityError
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from db.engine import get_db
-from models.device import Device, DeviceStatus
+from models.device import DeviceStatus
 from models.user import User
 from schemas.device import DeviceCreate, DeviceRead, DeviceUpdate
 from security.jwt_handler import get_admin_user, get_current_user
+from services.device_service import (
+    DeviceConflictError,
+    DeviceNotFoundError,
+    NoUpdateFieldsError,
+)
+from services.device_service import create_device as create_device_service
+from services.device_service import list_devices as list_devices_service
+from services.device_service import update_device as update_device_service
 
 router = APIRouter()
 
@@ -26,14 +40,13 @@ async def list_devices(
     offset: int = Query(default=0, ge=0),
     db: AsyncSession = Depends(get_db),
     current_user: User = Depends(get_current_user),
-) -> list[Device]:
-    query = select(Device)
-    if status_filter is not None:
-        query = query.where(Device.status == status_filter)
-    query = query.order_by(Device.hostname).limit(limit).offset(offset)
-
-    result = await db.execute(query)
-    return list(result.scalars().all())
+) -> list[DeviceRead]:
+    """
+    List devices with optional status filter and pagination.
+    Requires an authenticated user; no role escalation here.
+    """
+    devices = await list_devices_service(db, status_filter, limit, offset)
+    return [DeviceRead.model_validate(d) for d in devices]
 
 
 @router.post(
@@ -46,27 +59,20 @@ async def create_device(
     body: DeviceCreate,
     db: AsyncSession = Depends(get_db),
     current_user: User = Depends(get_admin_user),
-) -> Device:
-    device = Device(**body.model_dump())
-    db.add(device)
-
+) -> DeviceRead:
+    """
+    Create a new device.
+    Admin-only; enforces uniqueness on ip_address and returns 409 on conflict.
+    """
     try:
-        await db.commit()
-    except IntegrityError:
-        await db.rollback()
+        device = await create_device_service(db, current_user.email, body)
+    except DeviceConflictError as err:
         raise HTTPException(
             status_code=status.HTTP_409_CONFLICT,
-            detail=f"Device with ip_address '{body.ip_address}' already exists",
+            detail=str(err),
         )
 
-    await db.refresh(device)
-
-    # TODO once write_audit_log exists:
-    # await write_audit_log(db, actor=current_user.email, action="device.create",
-    #                        target_type="device", target_id=str(device.id),
-    #                        payload=body.model_dump(mode="json"))
-
-    return device
+    return DeviceRead.model_validate(device)
 
 
 @router.patch("/{device_id}", response_model=DeviceRead, summary="Update a device (admin only)")
@@ -75,26 +81,22 @@ async def update_device(
     body: DeviceUpdate,
     db: AsyncSession = Depends(get_db),
     current_user: User = Depends(get_admin_user),
-) -> Device:
-    result = await db.execute(select(Device).where(Device.id == device_id))
-    device = result.scalar_one_or_none()
+) -> DeviceRead:
+    """
+    Partially update an existing device.
+    Admin-only; rejects empty payloads and handles missing devices with 404.
+    """
+    try:
+        device = await update_device_service(db, current_user.email, device_id, body)
+    except DeviceNotFoundError:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="Device not found",
+        )
+    except NoUpdateFieldsError:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="No fields to update",
+        )
 
-    if device is None:
-        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Device not found")
-
-    update_data = body.model_dump(exclude_unset=True)
-    if not update_data:
-        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="No fields to update")
-
-    for field, value in update_data.items():
-        setattr(device, field, value)
-
-    await db.commit()
-    await db.refresh(device)
-
-    # TODO once write_audit_log exists:
-    # await write_audit_log(db, actor=current_user.email, action="device.update",
-    #                        target_type="device", target_id=str(device.id),
-    #                        payload=update_data)
-
-    return device
+    return DeviceRead.model_validate(device)
