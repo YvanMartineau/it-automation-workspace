@@ -1,17 +1,36 @@
 import React from "react";
 import ReactDOM from "react-dom/client";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
-import App from "./App";
-import "./index.css";
+import { ReactQueryDevtools } from "@tanstack/react-query-devtools";
+import { RouterProvider } from "react-router-dom";
+import { ThemeProvider } from "#/components/layout/ThemeProvider";
+import { router } from "#/App";
+import "#/index.css";
 
 const queryClient = new QueryClient({
-  defaultOptions: { queries: { staleTime: 30_000, retry: 1 } },
+  defaultOptions: {
+    queries: {
+      staleTime: 1000 * 30,        // 30s default
+      gcTime: 1000 * 60 * 5,       // 5m cache (v5: gcTime, not cacheTime)
+      refetchOnWindowFocus: true,
+      retry: (failureCount, error) => {
+        // Don't retry on 4xx client errors
+        if (error instanceof Error && error.message.includes("4")) {
+          return false;
+        }
+        return failureCount < 3;
+      },
+    },
+  },
 });
 
 ReactDOM.createRoot(document.getElementById("root")!).render(
   <React.StrictMode>
-    <QueryClientProvider client={queryClient}>
-      <App />
-    </QueryClientProvider>
+    <ThemeProvider defaultTheme="system" storageKey="it-dashboard-theme">
+      <QueryClientProvider client={queryClient}>
+        <RouterProvider router={router} />
+        <ReactQueryDevtools initialIsOpen={false} />
+      </QueryClientProvider>
+    </ThemeProvider>
   </React.StrictMode>
 );

@@ -5,27 +5,23 @@ import path from "path";
 export default defineConfig({
   plugins: [react()],
   resolve: {
-    alias: { "@": path.resolve(__dirname, "./src") },
+    alias: {
+      "@": path.resolve(__dirname, "./src"),
+    },
   },
   server: {
     port: 5173,
-    proxy: {
-      // All /api/* calls forwarded to FastAPI — eliminates CORS in dev
-      "/api": {
-        target: "http://localhost:8000",
-        changeOrigin: true,
-        rewrite: (p) => p.replace(/^\/api/, ""),
-      },
-    },
+    strictPort: true,
   },
   build: {
-    outDir: "dist",
-    sourcemap: false, // disable in prod — no source leakage
+    sourcemap: true,
     rollupOptions: {
       output: {
         manualChunks: {
-          vendor: ["react", "react-dom"],
+          vendor: ["react", "react-dom", "react-router-dom"],
           query: ["@tanstack/react-query"],
+          charts: ["recharts"],
+          table: ["@tanstack/react-table", "react-window"],
         },
       },
     },
