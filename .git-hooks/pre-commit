@@ -148,6 +148,7 @@ while IFS= read -r file; do
   [[ "$file" == *.env.example ]] && continue
   [[ "$file" == *DECISIONS.md ]] && continue
   [[ "$file" == .git-hooks/* ]] && continue
+  [[ "$file" == *package-lock.json ]] && continue
 
   if safe_run file "$file" | grep -qiE "text|utf-8"; then
     for pattern in "${SECRET_PATTERNS[@]}"; do
@@ -176,6 +177,7 @@ while IFS= read -r file; do
   [[ "$file" == *.env.example ]] && continue
   [[ "$file" == *DECISIONS.md ]] && continue
   [[ "$file" == .git-hooks/* ]] && continue
+  [[ "$file" == *package-lock.json ]] && continue
 
   if safe_run file "$file" | grep -qiE "text|utf-8"; then
     for pattern in "${ENTROPY_PATTERNS[@]}"; do
@@ -258,7 +260,9 @@ TS_FAIL=0
 
 if [[ -n "${TS_STAGED}" ]]; then
   if command -v npx &>/dev/null && [[ -f "${FRONTEND_DIR}/node_modules/.bin/eslint" ]]; then
-    TS_ARGS="$(echo "${TS_STAGED}" | tr '\n' ' ')"
+    # Strip the "frontend/" prefix so paths are relative to FRONTEND_DIR,
+    # since we cd into it before invoking eslint.
+    TS_ARGS="$(echo "${TS_STAGED}" | sed "s|^${FRONTEND_DIR}/||" | tr '\n' ' ')"
     if safe_run bash -c "cd ${FRONTEND_DIR} && npx eslint ${TS_ARGS} --quiet"; then
       ok "ESLint passed on staged TypeScript files"
     else
