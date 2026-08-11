@@ -12,6 +12,14 @@ export default defineConfig({
   server: {
     port: 5173,
     strictPort: true,
+    // Proxy configuration for API requests (CORS handling and dev/prod mismatch)
+    proxy: {
+      "/api": {
+        target: "http://localhost:8000",
+        changeOrigin: true,
+        rewrite: (path) => path.replace(/^\/api/, ""),
+      },
+    },
   },
   build: {
     sourcemap: true,
