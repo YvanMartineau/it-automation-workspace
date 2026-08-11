@@ -7,15 +7,16 @@ import { useAuthStore } from "#/hooks/useAuth";
 import { Button } from "#/components/ui/button";
 import { Input } from "#/components/ui/input";
 import { Label } from "#/components/ui/label";
-import { Checkbox } from "#/components/ui/checkbox";
 import { Card, CardContent, CardDescription, CardFooter, CardHeader, CardTitle } from "#/components/ui/card";
 import { AlertCircle, Loader2 } from "lucide-react";
 import { Alert, AlertDescription } from "#/components/ui/alert";
+import { api } from "#/lib/api";
+import { decodeAccessToken } from "#/lib/jwt";
+import { isAxiosError } from "axios";
 
 const loginSchema = z.object({
   email: z.string().email("Ungültige E-Mail-Adresse"),
   password: z.string().min(8, "Passwort muss mindestens 8 Zeichen enthalten"),
-  rememberMe: z.boolean().default(false),
 });
 
 type LoginFormData = z.infer<typeof loginSchema>;
@@ -27,15 +28,8 @@ export default function Login() {
   const [serverError, setServerError] = useState<string | null>(null);
   const [isLoading, setIsLoading] = useState(false);
 
-  const {
-    register,
-    handleSubmit,
-    formState: { errors },
-  } = useForm<LoginFormData>({
-    resolver: zodResolver(loginSchema),
-    defaultValues: {
-      rememberMe: false,
-    },
+  const { register, handleSubmit, formState: { errors } } = useForm<LoginFormData>({
+  resolver: zodResolver(loginSchema),
   });
 
   const onSubmit = async (data: LoginFormData) => {
@@ -43,21 +37,35 @@ export default function Login() {
     setServerError(null);
 
     try {
-      // TODO: Replace with actual API call via Axios instance
-      // Simulating API delay
-      await new Promise((resolve) => setTimeout(resolve, 1000));
+      const response = await api.post<{ access_token: string; token_type: string }>(
+        "/auth/login",
+        { email: data.email, password: data.password }
+      );
 
-      // Mock successful login
+      const { access_token } = response.data;
+      const claims = decodeAccessToken(access_token);
+
       setAuth({
-        id: "usr_001",
+        id: claims.sub,
         email: data.email,
-        role: "admin",
+        role: claims.role,
+        accessToken: access_token, // in-memory only — never persisted
       });
 
       const from = (location.state as { from?: { pathname: string } })?.from?.pathname || "/dashboard";
       navigate(from, { replace: true });
-    } catch {
-      setServerError("Anmeldung fehlgeschlagen. Bitte überprüfen Sie Ihre Anmeldedaten.");
+    } catch (err) {
+      if (isAxiosError(err)) {
+        if (err.response?.status === 401) {
+          setServerError("Anmeldung fehlgeschlagen. Bitte überprüfen Sie Ihre Anmeldedaten.");
+        } else if (err.response?.status === 429) {
+          setServerError("Zu viele Anmeldeversuche. Bitte versuchen Sie es später erneut.");
+        } else {
+          setServerError("Ein unerwarteter Fehler ist aufgetreten. Bitte versuchen Sie es erneut.");
+        }
+      } else {
+        setServerError("Ein unerwarteter Fehler ist aufgetreten. Bitte versuchen Sie es erneut.");
+      }
     } finally {
       setIsLoading(false);
     }
@@ -114,13 +122,6 @@ export default function Login() {
                 {errors.password.message}
               </p>
             )}
-          </div>
-
-          <div className="flex items-center space-x-2">
-            <Checkbox id="rememberMe" {...register("rememberMe")} />
-            <Label htmlFor="rememberMe" className="text-sm font-normal">
-              Angemeldet bleiben
-            </Label>
           </div>
 
           <Button type="submit" className="w-full" disabled={isLoading}>
