@@ -163,4 +163,23 @@
 
 ---
 
+## ADR-010 — UI Component Library: shadcn/ui
+**Date:** Project start
+**Status:** Accepted
+**Context:** The frontend needs a professional, accessible, and maintainable component set that works cleanly with Next.js 15 App Router, TypeScript, and Tailwind CSS under zero-cost constraints.
+**Decision:** Use shadcn/ui (Radix primitives + Tailwind). Components are copied into the repository and fully owned by the project.
+**Rationale:** 
+- Full source ownership and auditability
+- Excellent accessibility via Radix
+- Zero runtime CSS-in-JS overhead
+- Minimal bundle size
+- Perfect alignment with the chosen stack
+- Demonstrates higher engineering maturity than heavy design systems
+**Consequences:** 
+- Components live in the repo and must be maintained deliberately
+- Initial setup is slightly higher than using MUI/Chakra
+- Long-term flexibility and control are significantly better
+
+---
+
 *Add entries as you build. Every significant choice — including ones you reverse — belongs here.*
