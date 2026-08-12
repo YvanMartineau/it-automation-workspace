@@ -27,7 +27,7 @@ const queryClient = new QueryClient({
 
 ReactDOM.createRoot(document.getElementById("root")!).render(
   <React.StrictMode>
-    <ThemeProvider defaultTheme="system" storageKey="it-dashboard-theme">
+    <ThemeProvider defaultTheme="system" storageKey="it-dashboard-theme" attribute="class" enableSystem={true} disableTransitionOnChange={false}>
       <QueryClientProvider client={queryClient}>
         <RouterProvider router={router} />
         <Toaster 
