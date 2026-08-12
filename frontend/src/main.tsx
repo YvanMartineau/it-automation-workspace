@@ -4,6 +4,7 @@ import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { ReactQueryDevtools } from "@tanstack/react-query-devtools";
 import { RouterProvider } from "react-router-dom";
 import { ThemeProvider } from "#/components/layout/ThemeProvider";
+import { Toaster } from "#/components/ui/sonner";
 import { router } from "#/App";
 import "#/index.css";
 
@@ -29,6 +30,14 @@ ReactDOM.createRoot(document.getElementById("root")!).render(
     <ThemeProvider defaultTheme="system" storageKey="it-dashboard-theme">
       <QueryClientProvider client={queryClient}>
         <RouterProvider router={router} />
+        <Toaster 
+          position="top-right"
+          richColors
+          closeButton
+          duration={4000}
+          visibleToasts={5}
+          expand
+        />
         <ReactQueryDevtools initialIsOpen={false} />
       </QueryClientProvider>
     </ThemeProvider>

@@ -26,6 +26,23 @@
     --input: 214.3 31.8% 91.4%;
     --ring: 221 83% 53%;
     --radius: 0.5rem;
+
+        /* Sonner-specific semantic colors */
+    --success-bg: hsl(142 76% 96%);
+    --success-text: hsl(142 76% 36%);
+    --success-border: hsl(142 76% 86%);
+    
+    --error-bg: hsl(0 84% 97%);
+    --error-text: hsl(0 84% 60%);
+    --error-border: hsl(0 84% 90%);
+    
+    --warning-bg: hsl(38 92% 96%);
+    --warning-text: hsl(38 92% 50%);
+    --warning-border: hsl(38 92% 85%);
+    
+    --info-bg: hsl(199 89% 96%);
+    --info-text: hsl(199 89% 48%);
+    --info-border: hsl(199 89% 85%);
   }
 
   .dark {
@@ -48,6 +65,23 @@
     --border: 216 34% 17%;
     --input: 216 34% 17%;
     --ring: 221 83% 53%;
+
+        /* Dark mode Sonner colors */
+    --success-bg: hsl(142 76% 14%);
+    --success-text: hsl(142 76% 60%);
+    --success-border: hsl(142 76% 24%);
+    
+    --error-bg: hsl(0 84% 10%);
+    --error-text: hsl(0 84% 70%);
+    --error-border: hsl(0 84% 20%);
+    
+    --warning-bg: hsl(38 92% 14%);
+    --warning-text: hsl(38 92% 60%);
+    --warning-border: hsl(38 92% 24%);
+    
+    --info-bg: hsl(199 89% 14%);
+    --info-text: hsl(199 89% 60%);
+    --info-border: hsl(199 89% 24%);
   }
 
   body {
@@ -57,5 +91,37 @@
     font-feature-settings: "rlig" 1, "calt" 1;
     -webkit-font-smoothing: antialiased;
     -moz-osx-font-smoothing: grayscale;
+
+    /* Force Sonner semantic backgrounds */
+    [data-sonner-toast][data-type="success"] {
+      background: var(--success-bg) !important;
+      border-color: var(--success-border) !important;
+      color: var(--success-text) !important;
+    }
+
+    [data-sonner-toast][data-type="error"] {
+      background: var(--error-bg) !important;
+      border-color: var(--error-border) !important;
+      color: var(--error-text) !important;
+    }
+
+    [data-sonner-toast][data-type="warning"] {
+      background: var(--warning-bg) !important;
+      border-color: var(--warning-border) !important;
+      color: var(--warning-text) !important;
+    }
+
+    [data-sonner-toast][data-type="info"] {
+      background: var(--info-bg) !important;
+      border-color: var(--info-border) !important;
+      color: var(--info-text) !important;
+    }
+
+    /* Close button inherits toast color */
+    [data-sonner-toast] [data-close-button] {
+      color: currentColor !important;
+      background: transparent !important;
+      border: none !important;
+    }
   }
 }
