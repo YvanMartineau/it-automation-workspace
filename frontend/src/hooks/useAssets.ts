@@ -16,12 +16,11 @@ function pick<T>(arr: readonly T[], i: number): T {
 
 // Mock data generator for development
 const MOCK_ASSETS: Asset[] = Array.from({ length: 1250 }, (_, i) => {
-  const cpus = ["Intel i7-12700", "AMD Ryzen 9 5900X", "Apple M2 Pro", "Intel Xeon E5", "AMD EPYC 7763"];
-  const rams = ["16GB", "32GB", "64GB", "8GB", "128GB"];
-  const storages = ["512GB SSD", "1TB NVMe", "2TB HDD", "256GB SSD", "4TB RAID"];
+  const cpus = ["100%", "89%", "42%", "25%", "10%"];
+  const rams = ["100%", "32%", "64%", "8%", "90%"];
+  const storages = ["200/512GB", "500/1TB", "1/2TB", "23/256GB", "3.9/4TB"];
   const oss = ["Windows", "Linux", "macOS", "iOS", "Android", "Other"] as const;
-  const statuses = ["online", "offline", "maintenance", "decommissioned"] as const;
-  const depts = ["IT", "HR", "Finance", "Engineering", "Sales", "Support"];
+  const statuses = ["online", "offline", "sleeping", ] as const;
   const osVersions = ["11", "22.04", "14.2", "17.1", "13", "1.0"];
   const hostPrefixes = ["web", "db", "app", "mail", "file"];
 
@@ -35,8 +34,6 @@ const MOCK_ASSETS: Asset[] = Array.from({ length: 1250 }, (_, i) => {
     lastSeen: new Date(Date.now() - Math.random() * 7 * 24 * 60 * 60 * 1000).toISOString(),
     healthScore: Math.floor(Math.random() * 100),
     status: pick(statuses, i),
-    department: pick(depts, i),
-    assignedTo: i % 3 === 0 ? `user${i}@corp.local` : null,
     createdAt: new Date(Date.now() - Math.random() * 365 * 24 * 60 * 60 * 1000).toISOString(),
     updatedAt: new Date(Date.now() - Math.random() * 30 * 24 * 60 * 60 * 1000).toISOString(),
     specs: {
@@ -60,19 +57,17 @@ function filterAssets(assets: Asset[], filters: AssetFilters): Asset[] {
       filters.search === "" ||
       asset.hostname.toLowerCase().includes(filters.search.toLowerCase()) ||
       asset.ipAddress.includes(filters.search) ||
-      asset.macAddress.toLowerCase().includes(filters.search.toLowerCase()) ||
-      asset.assignedTo?.toLowerCase().includes(filters.search.toLowerCase());
+      asset.macAddress.toLowerCase().includes(filters.search.toLowerCase());
 
     const matchesStatus = filters.status === "all" || asset.status === filters.status;
     const matchesOS = filters.os === "all" || asset.os === filters.os;
-    const matchesDepartment = filters.department === "all" || asset.department === filters.department;
     const matchesHealth = filters.health === "all" ||
       (filters.health === "healthy" && asset.healthScore >= 80) ||
       (filters.health === "warning" && asset.healthScore >= 50 && asset.healthScore < 80) ||
       (filters.health === "critical" && asset.healthScore < 50) ||
       (filters.health === "unknown" && asset.healthScore === 0);
 
-    return matchesSearch && matchesStatus && matchesOS && matchesDepartment && matchesHealth;
+    return matchesSearch && matchesStatus && matchesOS && matchesHealth;
   });
 }
 
