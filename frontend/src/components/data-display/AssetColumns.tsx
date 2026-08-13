@@ -145,7 +145,7 @@ export function getAssetColumns(onDeleteAsset: (id: string) => void) {
 
     columnHelper.display({
       id: "actions",
-      header: "",
+      header: "Aktionen",
       cell: ({ row }) => <AssetRowActions asset={row.original} onDelete={onDeleteAsset} />,
       size: 50,
     }),

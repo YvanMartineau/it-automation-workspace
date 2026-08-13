@@ -102,12 +102,12 @@ export function AssetTable({
           <div
             key={headerGroup.id}
             className="sticky top-0 z-10 grid isolate border-b will-change-transform"
-            style={{ gridTemplateColumns, backgroundColor: "hsl(var(--white))", transform: "translateZ(0)" }}
+            style={{ gridTemplateColumns, backgroundColor: "hsl(var(--secondary))", transform: "translateZ(0)" , width: "100%",}}
           >
             {headerGroup.headers.map((header) => (
                 <div
                   key={header.id}
-                  className="flex h-12 items-center px-4 text-left align-middle text-sm font-medium text-muted-foreground"
+                  className="flex h-12 items-center px-4 text-left align-middle text-sm font-medium "
                 >
                   {header.isPlaceholder ? null : (
                     <div
