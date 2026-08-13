@@ -39,16 +39,14 @@ function HealthScoreBar({ score }: { score: number }) {
 function StatusBadge({ status }: { status: Asset["status"] }) {
   const variants: Record<Asset["status"], string> = {
     online: "bg-success/10 text-success border-success/20",
-    offline: "bg-muted text-muted-foreground",
-    maintenance: "bg-warning/10 text-warning border-warning/20",
-    decommissioned: "bg-danger/10 text-danger border-danger/20",
+    offline: "bg-danger/10 text-danger border-danger/20",
+    sleeping: "bg-warning/10 text-warning border-warning/20",
   };
 
   const labels: Record<Asset["status"], string> = {
     online: "Online",
     offline: "Offline",
-    maintenance: "Wartung",
-    decommissioned: "Außer Betrieb",
+    sleeping: "Schlafend",
   };
 
   return (
@@ -145,10 +143,16 @@ export const assetColumns = [
     size: 120,
   }),
 
-  columnHelper.accessor("department", {
-    header: "Abteilung",
-    cell: ({ getValue }) => <span className="text-sm">{getValue()}</span>,
-    size: 120,
+  columnHelper.accessor("specs", {
+    header: "Spezifikationen",
+    cell: ({ getValue }) => (
+      <div className="text-sm">
+        <p>CPU: {getValue().cpu}</p>
+        <p>RAM: {getValue().ram}</p>
+        <p>Storage: {getValue().storage}</p>
+      </div>
+    ),
+    size: 200,
   }),
 
   /* 

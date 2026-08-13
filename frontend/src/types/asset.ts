@@ -1,5 +1,5 @@
 //frontend/src/types/asset.ts
-export type AssetStatus = "online" | "offline" | "maintenance" | "decommissioned";
+export type AssetStatus = "online" | "offline" | "sleeping";
 export type AssetHealth = "healthy" | "warning" | "critical" | "unknown";
 export type OSType = "Windows" | "Linux" | "macOS" | "iOS" | "Android" | "Other";
 
@@ -13,8 +13,6 @@ export interface Asset {
   lastSeen: string; // ISO 8601
   healthScore: number; // 0-100
   status: AssetStatus;
-  department: string;
-  assignedTo: string | null;
   createdAt: string;
   updatedAt: string;
   specs: {
@@ -28,7 +26,6 @@ export interface AssetFilters {
   search: string;
   status: AssetStatus | "all";
   os: OSType | "all";
-  department: string | "all";
   health: AssetHealth | "all";
 }
 
