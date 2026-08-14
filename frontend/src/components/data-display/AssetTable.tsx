@@ -98,9 +98,11 @@ export function AssetTable({
           className="w-full overflow-auto"
           style={isVirtualized ? { maxHeight: "600px" } : undefined}
         >
-          {/* minWidth here is what makes the header/body agree on width and
-              scroll together correctly — see tableMinWidth comment above. */}
-          <div style={{ minWidth: `${tableMinWidth}px` }}>
+          {/* width:100% + minWidth is what makes the table shrink to fill
+              available space when fewer columns are shown, and only
+              overflow (via the parent's overflow-auto) once the visible
+              columns' combined minimum exceeds the container. */}
+          <div style={{ width: "100%", minWidth: `${tableMinWidth}px` }}>
             {table.getHeaderGroups().map((headerGroup) => (
               <div
                 key={headerGroup.id}
