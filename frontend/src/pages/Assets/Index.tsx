@@ -6,6 +6,7 @@
 
 import { useCallback, useState } from "react";
 import { toast } from "sonner";
+import { useQueryClient } from "@tanstack/react-query";
 import { useAssets, useDebouncedValue } from "#/hooks/useAssets";
 import { useAssetTable } from "#/hooks/useAssetTable";
 import { AssetStats } from "#/components/data-display/AssetStats";
@@ -21,14 +22,11 @@ const DEFAULT_FILTERS: AssetFilters = {
 };
 
 export default function AssetIndex() {
+  const queryClient = useQueryClient();
   const [filters, setFilters] = useState<AssetFilters>(DEFAULT_FILTERS);
   const [page, setPage] = useState(1);
   const [pageSize, setPageSize] = useState(25);
 
-  // BUG FIX: filters.search is the single source of truth (updated on every
-  // keystroke by the toolbar). We derive a debounced value straight from it
-  // instead of duplicating it into a second piece of state that nothing kept
-  // in sync — see the comment on useDebouncedValue in hooks/useAssets.ts.
   const debouncedSearch = useDebouncedValue(filters.search, 300);
 
   const queryFilters = {
@@ -37,14 +35,11 @@ export default function AssetIndex() {
   };
 
   const { data, isLoading, isFetching } = useAssets(queryFilters, page, pageSize);
-
-  // Table instance now lives in one place and is shared with the toolbar
-  // (needed for the column-visibility toggle) and with the table itself.
   const { table, deleteAsset, selectedRows } = useAssetTable(data);
 
   const handleFiltersChange = useCallback((newFilters: AssetFilters) => {
     setFilters(newFilters);
-    setPage(1); // Reset to first page on filter change
+    setPage(1);
   }, []);
 
   const handleReset = useCallback(() => {
@@ -61,9 +56,6 @@ export default function AssetIndex() {
     setPage(1);
   }, []);
 
-  // BUG FIX: previously hardcoded selectedCount={0} and onBulkDelete={() => {}}
-  // with a "Will be wired from AssetTable" comment that was never completed,
-  // so bulk delete silently did nothing. Now driven off the real table state.
   const handleBulkDelete = useCallback(() => {
     const ids = selectedRows.map((row) => row.original.id);
     if (ids.length === 0) return;
@@ -78,9 +70,20 @@ export default function AssetIndex() {
       });
   }, [selectedRows, deleteAsset, table]);
 
+  const handleScanComplete = useCallback(
+    (foundCount: number) => {
+      queryClient.invalidateQueries({ queryKey: ["assets"] });
+      if (foundCount > 0) {
+        toast.success("Scan abgeschlossen", {
+          description: `${foundCount} neue Assets entdeckt. Tabelle wird aktualisiert…`,
+        });
+      }
+    },
+    [queryClient]
+  );
+
   return (
     <div className="space-y-6">
-      {/* Page header */}
       <div className="flex items-center justify-between">
         <div>
           <h1 className="text-2xl font-semibold tracking-tight">Assets</h1>
@@ -90,19 +93,17 @@ export default function AssetIndex() {
         </div>
       </div>
 
-      {/* Stats cards */}
       <AssetStats />
 
-      {/* Toolbar with search and filters */}
       <AssetToolbar
         table={table}
         filters={filters}
         onFiltersChange={handleFiltersChange}
         selectedCount={selectedRows.length}
         onBulkDelete={handleBulkDelete}
+        onScanComplete={handleScanComplete}
       />
 
-      {/* Main table */}
       <AssetTable
         table={table}
         data={data}
