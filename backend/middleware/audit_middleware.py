@@ -14,7 +14,6 @@ atomic with the parent write in a later hardening pass, that's a deliberate
 follow-up — not addressed here, since the spec explicitly wants audit
 failures to be non-fatal to the primary operation.
 """
-
 import logging
 
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -61,3 +60,20 @@ async def write_audit_log(
             },
             exc_info=True,
         )
+        # A failed commit leaves the session's transaction in a state that
+        # rejects further use until rolled back (SQLAlchemy/asyncpg raise
+        # "Can't reconnect until invalid transaction is rolled back" on the
+        # next statement otherwise). get_db()'s own rollback-on-except only
+        # fires if this exception propagates out of the route handler — and
+        # it never does, by design, since audit failures must not fail the
+        # caller. So this function owns cleaning up its own transaction
+        # before returning, rather than leaving that to the caller's session
+        # teardown.
+        try:
+            await db.rollback()
+        except Exception:
+            logger.error(
+                "AUDIT LOG ROLLBACK ALSO FAILED",
+                extra={"actor": actor, "action": action},
+                exc_info=True,
+            )
