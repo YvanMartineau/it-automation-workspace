@@ -1,22 +1,14 @@
 // frontend/src/components/data-display/AssetTable.tsx
-import { useMemo, useRef, useState } from "react";
-import {
-  useReactTable,
-  getCoreRowModel,
-  getSortedRowModel,
-  getFilteredRowModel,
-  flexRender,
-  type SortingState,
-} from "@tanstack/react-table";
-import { getAssetColumns } from "./AssetColumns";
+import { useMemo, useRef } from "react";
+import { flexRender, type Table as TanStackTable } from "@tanstack/react-table";
 import { VirtualizedTableBody } from "./VirtualizedTableBody";
 import { AssetPagination } from "./AssetPagination";
 import { AssetEmptyState } from "./AssetEmptyState";
 import { TableSkeleton } from "#/components/feedback/TableSkeleton";
-import { useDeleteAsset } from "#/hooks/useAssets";
-import type { PaginatedAssetList } from "#/types/asset";
+import type { Asset, PaginatedAssetList } from "#/types/asset";
 
 interface AssetTableProps {
+  table: TanStackTable<Asset>;
   data: PaginatedAssetList | undefined;
   isLoading: boolean;
   page: number;
@@ -27,6 +19,7 @@ interface AssetTableProps {
 }
 
 export function AssetTable({
+  table,
   data,
   isLoading,
   page,
@@ -35,47 +28,54 @@ export function AssetTable({
   onPageSizeChange,
   onFiltersReset,
 }: AssetTableProps) {
-  const [sorting, setSorting] = useState<SortingState>([]);
-  const [rowSelection, setRowSelection] = useState<Record<string, boolean>>({});
-  const deleteAsset = useDeleteAsset();
   const scrollContainerRef = useRef<HTMLDivElement>(null);
 
-  const columns = useMemo(() => getAssetColumns(deleteAsset.mutate), [deleteAsset.mutate]);
+  const visibleColumns = table.getVisibleLeafColumns();
 
-  const table = useReactTable({
-    data: data?.data ?? [],
-    columns,
-    state: { sorting, rowSelection },
-    onSortingChange: setSorting,
-    onRowSelectionChange: setRowSelection,
-    getCoreRowModel: getCoreRowModel(),
-    getSortedRowModel: getSortedRowModel(),
-    getFilteredRowModel: getFilteredRowModel(),
-    enableRowSelection: true,
-  });
+  // BUG FIX (horizontal scroll losing its styling): the header row and each
+  // body row previously each set their own `width: "100%"` (or `w-full`)
+  // independently, while relying on `display: grid` + `minmax(size, 1fr)`
+  // tracks to force overflow when content was wider than the container.
+  // That works in principle, but it means header and body rows only agree
+  // on their rendered width *implicitly*, via each one separately resolving
+  // "100% of my containing block" vs "however wide my grid tracks force me
+  // to be" — plus the header additionally carried `transform: translateZ(0)`
+  // for a sticky-position hint it didn't need, which can introduce its own
+  // sub-pixel rounding under a transform vs. the untransformed body rows.
+  // Small per-row disagreements compound as you scroll, which reads as the
+  // table "losing its styling."
+  //
+  // Fix: compute one explicit pixel width from the actual column sizes and
+  // apply it as `minWidth` to the header and every row, so they are always
+  // measured identically instead of independently re-deriving a width that
+  // happens to usually match.
+  const tableMinWidth = useMemo(
+    () => visibleColumns.reduce((sum, col) => sum + col.getSize(), 0),
+    [visibleColumns]
+  );
 
   const gridTemplateColumns = useMemo(
     () =>
-      table
-        .getVisibleLeafColumns()
+      visibleColumns
         .map((col) => {
           const isFixedWidthColumn = col.id === "select" || col.id === "actions";
           return isFixedWidthColumn ? `${col.getSize()}px` : `minmax(${col.getSize()}px, 1fr)`;
         })
         .join(" "),
-    [table.getState().columnSizing, columns]
+    [visibleColumns]
   );
 
-  const selectedRows = table.getSelectedRowModel().rows;
   const isVirtualized = data ? data.meta.totalItems > 100 : false;
 
   if (isLoading) {
-    return <TableSkeleton rows={pageSize} columns={columns.length} />;
+    return <TableSkeleton rows={pageSize} columns={visibleColumns.length} />;
   }
 
   if (!data?.data.length) {
     return <AssetEmptyState onReset={onFiltersReset} />;
   }
+
+  const selectedRows = table.getSelectedRowModel().rows;
 
   return (
     <div className="space-y-4">
@@ -98,59 +98,64 @@ export function AssetTable({
           className="w-full overflow-auto"
           style={isVirtualized ? { maxHeight: "600px" } : undefined}
         >
-          {table.getHeaderGroups().map((headerGroup) => (
-          <div
-            key={headerGroup.id}
-            className="sticky top-0 z-10 grid isolate border-b will-change-transform"
-            style={{ gridTemplateColumns, backgroundColor: "hsl(var(--secondary))", transform: "translateZ(0)" , width: "100%",}}
-          >
-            {headerGroup.headers.map((header) => (
-                <div
-                  key={header.id}
-                  className="flex h-12 items-center px-4 text-left align-middle text-sm font-medium "
-                >
-                  {header.isPlaceholder ? null : (
-                    <div
-                      className={
-                        header.column.getCanSort()
-                          ? "flex cursor-pointer select-none items-center gap-2"
-                          : "flex items-center gap-2"
-                      }
-                      onClick={header.column.getToggleSortingHandler()}
-                    >
-                      {flexRender(header.column.columnDef.header, header.getContext())}
-                      {{ asc: " ↑", desc: " ↓" }[header.column.getIsSorted() as string] ?? null}
-                    </div>
-                  )}
-                </div>
-              ))}
-            </div>
-          ))}
+          {/* minWidth here is what makes the header/body agree on width and
+              scroll together correctly — see tableMinWidth comment above. */}
+          <div style={{ minWidth: `${tableMinWidth}px` }}>
+            {table.getHeaderGroups().map((headerGroup) => (
+              <div
+                key={headerGroup.id}
+                className="sticky top-0 z-10 grid isolate border-b"
+                style={{ gridTemplateColumns, backgroundColor: "hsl(var(--secondary))" }}
+              >
+                {headerGroup.headers.map((header) => (
+                  <div
+                    key={header.id}
+                    className="flex h-12 items-center px-4 text-left align-middle text-sm font-medium "
+                  >
+                    {header.isPlaceholder ? null : (
+                      <div
+                        className={
+                          header.column.getCanSort()
+                            ? "flex cursor-pointer select-none items-center gap-2"
+                            : "flex items-center gap-2"
+                        }
+                        onClick={header.column.getToggleSortingHandler()}
+                      >
+                        {flexRender(header.column.columnDef.header, header.getContext())}
+                        {{ asc: " ↑", desc: " ↓" }[header.column.getIsSorted() as string] ?? null}
+                      </div>
+                    )}
+                  </div>
+                ))}
+              </div>
+            ))}
 
-          {isVirtualized ? (
-            <VirtualizedTableBody
-              table={table}
-              gridTemplateColumns={gridTemplateColumns}
-              scrollContainerRef={scrollContainerRef}
-            />
-          ) : (
-            <div>
-              {table.getRowModel().rows.map((row) => (
-                <div
-                  key={row.id}
-                  data-state={row.getIsSelected() ? "selected" : undefined}
-                  className="grid border-b transition-colors hover:bg-muted/50 data-[state=selected]:bg-muted"
-                  style={{ gridTemplateColumns }}
-                >
-                  {row.getVisibleCells().map((cell) => (
-                    <div key={cell.id} className="flex items-center p-4 align-middle">
-                      {flexRender(cell.column.columnDef.cell, cell.getContext())}
-                    </div>
-                  ))}
-                </div>
-              ))}
-            </div>
-          )}
+            {isVirtualized ? (
+              <VirtualizedTableBody
+                table={table}
+                gridTemplateColumns={gridTemplateColumns}
+                tableMinWidth={tableMinWidth}
+                scrollContainerRef={scrollContainerRef}
+              />
+            ) : (
+              <div>
+                {table.getRowModel().rows.map((row) => (
+                  <div
+                    key={row.id}
+                    data-state={row.getIsSelected() ? "selected" : undefined}
+                    className="grid border-b transition-colors hover:bg-muted/50 data-[state=selected]:bg-muted"
+                    style={{ gridTemplateColumns }}
+                  >
+                    {row.getVisibleCells().map((cell) => (
+                      <div key={cell.id} className="flex items-center p-4 align-middle">
+                        {flexRender(cell.column.columnDef.cell, cell.getContext())}
+                      </div>
+                    ))}
+                  </div>
+                ))}
+              </div>
+            )}
+          </div>
         </div>
       </div>
 

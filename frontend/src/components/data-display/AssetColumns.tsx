@@ -57,6 +57,13 @@ export function getAssetColumns(onDeleteAsset: (id: string) => void) {
       id: "select",
       header: ({ table }) => (
         <Checkbox
+          // CORRECTION: I previously "fixed" this to Radix's pattern
+          // (checked={... ? true : ... ? "indeterminate" : false}), on the
+          // wrong assumption that this project used Radix-based shadcn
+          // primitives. It doesn't — this is Base UI (@base-ui/react), whose
+          // Checkbox takes `indeterminate` as its own separate boolean prop,
+          // not folded into `checked` (checked is strictly boolean here).
+          // The original two-prop version below was correct as written.
           checked={table.getIsAllPageRowsSelected()}
           indeterminate={table.getIsSomePageRowsSelected() && !table.getIsAllPageRowsSelected()}
           onCheckedChange={(value) => table.toggleAllPageRowsSelected(!!value)}

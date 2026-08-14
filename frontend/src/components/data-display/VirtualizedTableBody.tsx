@@ -16,6 +16,7 @@ import type { Asset } from "#/types/asset";
 interface VirtualizedTableBodyProps {
   table: TanStackTable<Asset>;
   gridTemplateColumns: string;
+  tableMinWidth: number;
   scrollContainerRef: RefObject<HTMLDivElement>;
 }
 
@@ -24,6 +25,7 @@ const ROW_HEIGHT = 52; // Fixed row height for performance
 export function VirtualizedTableBody({
   table,
   gridTemplateColumns,
+  tableMinWidth,
   scrollContainerRef,
 }: VirtualizedTableBodyProps) {
   const rows = table.getRowModel().rows;
@@ -39,7 +41,7 @@ export function VirtualizedTableBody({
   const totalSize = virtualizer.getTotalSize();
 
   return (
-    <div style={{ height: `${totalSize}px`, width: "100%", position: "relative" }}>
+    <div style={{ height: `${totalSize}px`, minWidth: `${tableMinWidth}px`, position: "relative" }}>
       {virtualRows.map((virtualRow) => {
         const row = rows[virtualRow.index];
         if (!row) return null;
@@ -48,9 +50,10 @@ export function VirtualizedTableBody({
             key={row.id}
             data-index={virtualRow.index}
             data-state={row.getIsSelected() ? "selected" : undefined}
-            className="absolute left-0 grid w-full items-center border-b transition-colors hover:bg-muted/50 data-[state=selected]:bg-muted"
+            className="absolute left-0 grid items-center border-b transition-colors hover:bg-muted/50 data-[state=selected]:bg-muted"
             style={{
               gridTemplateColumns,
+              minWidth: `${tableMinWidth}px`,
               height: `${virtualRow.size}px`,
               transform: `translateY(${virtualRow.start}px)`,
             }}

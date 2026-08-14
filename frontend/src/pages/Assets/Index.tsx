@@ -4,8 +4,10 @@
  * @module pages/Assets/Index
  */
 
-import { useState, useCallback } from "react";
-import { useAssets, useDebouncedSearch } from "#/hooks/useAssets";
+import { useCallback, useState } from "react";
+import { toast } from "sonner";
+import { useAssets, useDebouncedValue } from "#/hooks/useAssets";
+import { useAssetTable } from "#/hooks/useAssetTable";
 import { AssetStats } from "#/components/data-display/AssetStats";
 import { AssetToolbar } from "#/components/data-display/AssetToolbar";
 import { AssetTable } from "#/components/data-display/AssetTable";
@@ -15,7 +17,6 @@ const DEFAULT_FILTERS: AssetFilters = {
   search: "",
   status: "all",
   os: "all",
-  department: "all",
   health: "all",
 };
 
@@ -24,14 +25,22 @@ export default function AssetIndex() {
   const [page, setPage] = useState(1);
   const [pageSize, setPageSize] = useState(25);
 
-  const { debouncedValue: searchValue } = useDebouncedSearch(filters.search);
+  // BUG FIX: filters.search is the single source of truth (updated on every
+  // keystroke by the toolbar). We derive a debounced value straight from it
+  // instead of duplicating it into a second piece of state that nothing kept
+  // in sync — see the comment on useDebouncedValue in hooks/useAssets.ts.
+  const debouncedSearch = useDebouncedValue(filters.search, 300);
 
   const queryFilters = {
     ...filters,
-    search: searchValue,
+    search: debouncedSearch,
   };
 
   const { data, isLoading, isFetching } = useAssets(queryFilters, page, pageSize);
+
+  // Table instance now lives in one place and is shared with the toolbar
+  // (needed for the column-visibility toggle) and with the table itself.
+  const { table, deleteAsset, selectedRows } = useAssetTable(data);
 
   const handleFiltersChange = useCallback((newFilters: AssetFilters) => {
     setFilters(newFilters);
@@ -52,6 +61,23 @@ export default function AssetIndex() {
     setPage(1);
   }, []);
 
+  // BUG FIX: previously hardcoded selectedCount={0} and onBulkDelete={() => {}}
+  // with a "Will be wired from AssetTable" comment that was never completed,
+  // so bulk delete silently did nothing. Now driven off the real table state.
+  const handleBulkDelete = useCallback(() => {
+    const ids = selectedRows.map((row) => row.original.id);
+    if (ids.length === 0) return;
+
+    Promise.all(ids.map((id) => deleteAsset.mutateAsync(id)))
+      .then(() => {
+        table.resetRowSelection();
+        toast.success(`${ids.length} Asset(s) gelöscht`);
+      })
+      .catch(() => {
+        toast.error("Löschen fehlgeschlagen, bitte erneut versuchen.");
+      });
+  }, [selectedRows, deleteAsset, table]);
+
   return (
     <div className="space-y-6">
       {/* Page header */}
@@ -69,14 +95,16 @@ export default function AssetIndex() {
 
       {/* Toolbar with search and filters */}
       <AssetToolbar
+        table={table}
         filters={filters}
         onFiltersChange={handleFiltersChange}
-        selectedCount={0} // Will be wired from AssetTable
-        onBulkDelete={() => {}} // Will be wired from AssetTable
+        selectedCount={selectedRows.length}
+        onBulkDelete={handleBulkDelete}
       />
 
       {/* Main table */}
       <AssetTable
+        table={table}
         data={data}
         isLoading={isLoading}
         page={page}
