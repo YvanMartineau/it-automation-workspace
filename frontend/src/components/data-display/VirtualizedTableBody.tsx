@@ -41,7 +41,7 @@ export function VirtualizedTableBody({
   const totalSize = virtualizer.getTotalSize();
 
   return (
-    <div style={{ height: `${totalSize}px`, minWidth: `${tableMinWidth}px`, position: "relative" }}>
+    <div style={{ height: `${totalSize}px`, width: "100%", minWidth: `${tableMinWidth}px`, position: "relative" }}>
       {virtualRows.map((virtualRow) => {
         const row = rows[virtualRow.index];
         if (!row) return null;
@@ -53,6 +53,25 @@ export function VirtualizedTableBody({
             className="absolute left-0 grid items-center border-b transition-colors hover:bg-muted/50 data-[state=selected]:bg-muted"
             style={{
               gridTemplateColumns,
+              // BUG FIX (columns not reclaiming space when fewer are shown):
+              // `position: absolute` with only `left: 0` set (no `right`)
+              // sizes an element by shrink-to-fit, not by filling its
+              // containing block — unlike the sticky header or the
+              // non-virtualized row path, both of which stay in normal flow
+              // and fill available width automatically. That's why hiding
+              // columns shrank these rows toward their content minimum
+              // instead of letting the remaining columns grow to fill the
+              // table, while the header (not absolutely positioned) did
+              // grow — causing the mismatch. `width: "100%"` paired with
+              // `minWidth` restores the same "fill space, but never shrink
+              // below the sum of column minimums" behavior everywhere:
+              // when there's room, the row is exactly 100% of the
+              // container and the `1fr` columns expand into it; when the
+              // visible columns' combined minimum exceeds the container,
+              // minWidth wins and the scroll container's existing
+              // `overflow-auto` kicks in — so overflow only appears when
+              // it's actually needed.
+              width: "100%",
               minWidth: `${tableMinWidth}px`,
               height: `${virtualRow.size}px`,
               transform: `translateY(${virtualRow.start}px)`,
