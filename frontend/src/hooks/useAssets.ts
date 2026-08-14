@@ -1,7 +1,7 @@
 // frontend/src/hooks/useAssets.ts
 
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
-import { useState, useCallback, useEffect, useRef } from "react";
+import { useState, useEffect } from "react";
 import type { Asset, AssetFilters, PaginatedAssetList, AssetStats } from "#/types/asset";
 
 /**
@@ -20,7 +20,7 @@ const MOCK_ASSETS: Asset[] = Array.from({ length: 1250 }, (_, i) => {
   const rams = ["100%", "32%", "64%", "8%", "90%"];
   const storages = ["200/512GB", "500/1TB", "1/2TB", "23/256GB", "3.9/4TB"];
   const oss = ["Windows", "Linux", "macOS", "iOS", "Android", "Other"] as const;
-  const statuses = ["online", "offline", "sleeping", ] as const;
+  const statuses = ["online", "offline", "sleeping"] as const;
   const osVersions = ["11", "22.04", "14.2", "17.1", "13", "1.0"];
   const hostPrefixes = ["web", "db", "app", "mail", "file"];
 
@@ -48,8 +48,18 @@ const ASSETS_QUERY_KEY = ["assets"] as const;
 const ASSET_STATS_QUERY_KEY = ["assets", "stats"] as const;
 
 /**
- * Filter and paginate assets client-side
- * In production, this moves to the API with cursor pagination
+ * Filter and paginate assets client-side.
+ *
+ * NOTE (flagged, see chat): this runs against the full in-memory mock array,
+ * which is fine at 1,250 rows. Once `lib/api.ts` is wired to the real
+ * backend, this filtering step is what should move server-side (per your
+ * "frontend first, then backend on request" instruction) — the frontend
+ * should keep doing instant client-side filtering only against whatever
+ * page/window of data it already has, not against the full table.
+ *
+ * `filters.department` is intentionally not applied here: `Asset` has no
+ * `department` field and the toolbar has no department control wired up.
+ * Flagged separately — needs a decision, not a silent guess.
  */
 function filterAssets(assets: Asset[], filters: AssetFilters): Asset[] {
   return assets.filter((asset) => {
@@ -144,32 +154,31 @@ export function useDeleteAsset() {
 }
 
 /**
- * Hook for debounced search input
- * 300ms debounce per spec performance constraints
+ * Debounce any value by `delay` ms. Unlike the previous `useDebouncedSearch`,
+ * this hook does NOT keep its own separate copy of the source value — it
+ * only ever tracks a delayed derivative of whatever `value` you pass in.
+ *
+ * BUG THIS REPLACES: the old `useDebouncedSearch(initialValue)` seeded its
+ * internal state from `initialValue` only once on mount (`useState(initialValue)`),
+ * and exposed a `handleChange` setter that nothing ever called — the caller
+ * in Index.tsx only read `debouncedValue` back out. Since the search <input>
+ * updated `filters.search` directly (bypassing the hook entirely),
+ * `debouncedValue` stayed frozen at its mount-time value ("") forever, so the
+ * search filter silently never took effect. Confirmed with an isolated
+ * repro: typing a hostname into the search box left the result count at the
+ * full unfiltered 1,250/50-pages total.
+ *
+ * Fix: single source of truth. `filters.search` (already updated instantly
+ * on every keystroke by the toolbar) is passed straight into this hook, and
+ * the debounced value it returns is what actually drives the query.
  */
-export function useDebouncedSearch(initialValue = "", delay = 300) {
-  const [value, setValue] = useState(initialValue);
-  const [debouncedValue, setDebouncedValue] = useState(initialValue);
-  const timeoutRef = useRef<ReturnType<typeof setTimeout>>();
+export function useDebouncedValue<T>(value: T, delay = 300): T {
+  const [debouncedValue, setDebouncedValue] = useState(value);
 
   useEffect(() => {
-    if (timeoutRef.current) {
-      clearTimeout(timeoutRef.current);
-    }
-    timeoutRef.current = setTimeout(() => {
-      setDebouncedValue(value);
-    }, delay);
-
-    return () => {
-      if (timeoutRef.current) {
-        clearTimeout(timeoutRef.current);
-      }
-    };
+    const timeout = setTimeout(() => setDebouncedValue(value), delay);
+    return () => clearTimeout(timeout);
   }, [value, delay]);
 
-  const handleChange = useCallback((newValue: string) => {
-    setValue(newValue);
-  }, []);
-
-  return { value, debouncedValue, handleChange };
+  return debouncedValue;
 }
