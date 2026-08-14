@@ -1,6 +1,14 @@
-//frontend/src/components/data-display/AssetToolbar.tsx
-import { useState } from "react";
-import { Filter, Plus, Download, Trash2, Columns3, FileText, FileSpreadsheet, FileJson } from "lucide-react";
+import { useState, useEffect, useCallback } from "react";
+import {
+  Filter,
+  Download,
+  Trash2,
+  Columns3,
+  FileText,
+  FileSpreadsheet,
+  FileJson,
+  ScanLine,
+} from "lucide-react";
 import { toast } from "sonner";
 import { Button } from "#/components/ui/button";
 import { SearchInput } from "#/components/forms/SearchInput";
@@ -21,6 +29,8 @@ import {
   DropdownMenuSeparator,
   DropdownMenuTrigger,
 } from "#/components/ui/dropdown-menu";
+import { ScanDialog } from "#/components/feedback/ScanDialog";
+import { useScanSimulation } from "#/hooks/useScanSimulation";
 import type { Table as TanStackTable } from "@tanstack/react-table";
 import type { Asset, AssetFilters, AssetStatus, OSType, AssetHealth } from "#/types/asset";
 
@@ -30,6 +40,8 @@ interface AssetToolbarProps {
   onFiltersChange: (filters: AssetFilters) => void;
   selectedCount: number;
   onBulkDelete: () => void;
+  /** Called when the simulated scan completes with the number of discovered assets. */
+  onScanComplete?: (foundCount: number) => void;
 }
 
 const STATUS_OPTIONS: { value: AssetStatus | "all"; label: string }[] = [
@@ -57,8 +69,6 @@ const HEALTH_OPTIONS: { value: AssetHealth | "all"; label: string }[] = [
   { value: "unknown", label: "Unbekannt" },
 ];
 
-// Columns nobody should be able to hide via the toggle — selection checkbox
-// and row actions are structural, not data fields.
 const NON_HIDEABLE_COLUMN_IDS = new Set(["select", "actions"]);
 
 export function AssetToolbar({
@@ -67,8 +77,11 @@ export function AssetToolbar({
   onFiltersChange,
   selectedCount,
   onBulkDelete,
+  onScanComplete,
 }: AssetToolbarProps) {
   const [showFilters, setShowFilters] = useState(false);
+  const [scanOpen, setScanOpen] = useState(false);
+  const { state: scanState, startScan, cancelScan } = useScanSimulation();
 
   const updateFilter = <K extends keyof AssetFilters>(
     key: K,
@@ -77,11 +90,41 @@ export function AssetToolbar({
     onFiltersChange({ ...filters, [key]: value });
   };
 
-  // TODO: no export endpoint exists yet (lib/api.ts is still in progress and
-  // doesn't have one). Wired to a placeholder toast for now so the UI is
-  // functional and the format choices are settled; swap the toast for a real
-  // request (e.g. GET /assets/export?format=csv&...filters) once the backend
-  // route exists. Flagged in chat rather than guessing at the endpoint shape.
+  // Auto-close dialog and notify parent when scan finishes
+  useEffect(() => {
+    if (scanState.status === "complete") {
+      const timer = setTimeout(() => {
+        setScanOpen(false);
+        if (scanState.hostsFound > 0) {
+          toast.success("Scan abgeschlossen", {
+            description: `${scanState.hostsFound} neue Assets wurden entdeckt.`,
+          });
+        } else {
+          toast.info("Scan abgeschlossen", {
+            description: "Keine neuen Assets im Netzwerk gefunden.",
+          });
+        }
+        onScanComplete?.(scanState.hostsFound);
+      }, 1500);
+      return () => clearTimeout(timer);
+    }
+  }, [scanState.status, scanState.hostsFound, onScanComplete]);
+
+  const handleStartScan = useCallback(() => {
+    setScanOpen(true);
+    startScan();
+  }, [startScan]);
+
+  const handleScanOpenChange = useCallback(
+    (open: boolean) => {
+      if (!open && scanState.isScanning) {
+        cancelScan();
+      }
+      setScanOpen(open);
+    },
+    [scanState.isScanning, cancelScan]
+  );
+
   const handleExport = (format: "csv" | "xlsx" | "pdf") => {
     toast.info(`Export als ${format.toUpperCase()} wird vorbereitet…`, {
       description: "Backend-Export-Endpoint ist noch nicht angebunden.",
@@ -129,12 +172,8 @@ export function AssetToolbar({
             </Button>
           )}
 
-          {/* Column visibility ("display fields on choice") */}
+          {/* Column visibility */}
           <DropdownMenu>
-            {/* CORRECTION: Base UI has no `asChild` (that's a Radix pattern
-                I wrongly assumed applied here). Composition works via a
-                `render` prop instead — matches how this project's own
-                select.tsx does it (SelectPrimitive.Icon render={<... />}). */}
             <DropdownMenuTrigger
               render={
                 <Button variant="outline" size="sm" className="gap-2">
@@ -165,7 +204,7 @@ export function AssetToolbar({
             </DropdownMenuContent>
           </DropdownMenu>
 
-          {/* Export — was previously a plain Button with no menu at all */}
+          {/* Export */}
           <DropdownMenu>
             <DropdownMenuTrigger
               render={
@@ -191,9 +230,15 @@ export function AssetToolbar({
             </DropdownMenuContent>
           </DropdownMenu>
 
-          <Button size="sm" className="gap-2">
-            <Plus className="h-4 w-4" aria-hidden="true" />
-            Asset hinzufügen
+          {/* Network Scan (replaces "Asset hinzufügen") */}
+          <Button
+            size="sm"
+            className="gap-2"
+            onClick={handleStartScan}
+            disabled={scanState.isScanning}
+          >
+            <ScanLine className="h-4 w-4" aria-hidden="true" />
+            {scanState.isScanning ? "Scan läuft…" : "Netzwerk-Scan"}
           </Button>
         </div>
       </div>
@@ -250,6 +295,14 @@ export function AssetToolbar({
           </Select>
         </div>
       )}
+
+      {/* Scan Dialog */}
+      <ScanDialog
+        open={scanOpen}
+        onOpenChange={handleScanOpenChange}
+        scanState={scanState}
+        onCancel={cancelScan}
+      />
     </div>
   );
 }
