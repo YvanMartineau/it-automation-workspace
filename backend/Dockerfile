@@ -7,6 +7,12 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
     libharfbuzz0b \
     libpangoft2-1.0-0 \
     && rm -rf /var/lib/apt/lists/*
+# Grants nmap's binary the raw-socket capability directly, so appuser
+# (non-root) can still do ARP/ICMP-based discovery. cap_add on the
+# container alone isn't enough — it makes the capability *available*,
+# but a non-root process exec'ing an ordinary binary doesn't inherit it
+# without this.
+RUN setcap cap_net_raw,cap_net_admin+eip $(which nmap)
 
 WORKDIR /app
 
