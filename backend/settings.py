@@ -42,7 +42,7 @@ class Settings(BaseSettings):
 
     # App
     FRONTEND_URL: str = "http://localhost:5173"
-    ALLOWED_SCAN_SUBNET: str = "192.168.1.0/24"
+    ALLOWED_SCAN_SUBNET: str = "192.168.179.0/24" #For Local(Discovers my WIFI devices) and #192.168.1.0/24 for Prod
     APP_ENV: str = "development"
     LOG_LEVEL: str = "INFO"
 

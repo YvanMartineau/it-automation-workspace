@@ -8,23 +8,21 @@ from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 from slowapi import _rate_limit_exceeded_handler
 from slowapi.errors import RateLimitExceeded
-
 from core.exceptions import setup_exception_handlers
 from settings import get_settings
 from security.rate_limiter import limiter
-# from services.scheduler import start_scheduler, stop_scheduler
+from services.scheduler import start_scheduler, stop_scheduler
 # from routers import auth, devices, scan, onboard, audit, reports
 from routers import auth, devices, audit, scan
 
 settings = get_settings()
 
-
 @asynccontextmanager
-async def lifespan(app: FastAPI):
-    # start_scheduler()
-    yield
-    # stop_scheduler()
 
+async def lifespan(app: FastAPI):
+    start_scheduler()
+    yield
+    stop_scheduler()
 
 def create_app() -> FastAPI:
     app = FastAPI(
@@ -37,9 +35,9 @@ def create_app() -> FastAPI:
     )
 
     app.state.limiter = limiter
+
     setup_exception_handlers(app)
     app.add_exception_handler(RateLimitExceeded, _rate_limit_exceeded_handler)
-
     app.add_middleware(
         CORSMiddleware,
         allow_origins=[settings.FRONTEND_URL, "http://localhost:5173"],
@@ -58,8 +56,6 @@ def create_app() -> FastAPI:
     @app.get("/health", tags=["health"])
     async def health_check():
         return {"status": "ok", "env": settings.APP_ENV}
-
     return app
-
 
 app = create_app()
