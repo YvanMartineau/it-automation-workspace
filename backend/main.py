@@ -50,7 +50,7 @@ def create_app() -> FastAPI:
 
     app.include_router(auth.router, prefix="/auth", tags=["auth"])
     app.include_router(devices.router, prefix="/devices", tags=["devices"])
-    app.include_router(scan.router, prefix="/scan", tags=["scan"])
+    app.include_router(scan.router)
     # app.include_router(onboard.router, prefix="/onboard", tags=["onboard"])
     app.include_router(audit.router, prefix="/audit-logs", tags=["audit"])
     # app.include_router(reports.router, prefix="/reports", tags=["reports"])
