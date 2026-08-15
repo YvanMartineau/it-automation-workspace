@@ -3,6 +3,7 @@ import enum
 import uuid
 
 from sqlalchemy import DateTime, Enum, Float, String, func
+from sqlalchemy.dialects.postgresql import JSONB
 from sqlalchemy.dialects.postgresql import UUID as PG_UUID
 from sqlalchemy.orm import Mapped, mapped_column
 
@@ -30,6 +31,16 @@ class Device(Base):
     cpu_percent: Mapped[float | None] = mapped_column(Float, nullable=True)
     memory_percent: Mapped[float | None] = mapped_column(Float, nullable=True)
     os_info: Mapped[str | None] = mapped_column(String(255), nullable=True)
+    # Approximate round-trip time from the most recent scan's `-sn` pass,
+    # in milliseconds. Wall-clock timing of the nmap subprocess call, not
+    # nmap's internal probe RTT — see services/scanner.py's module
+    # docstring for why. Good enough for a relative "is this host slow to
+    # respond" signal, not a precision network-diagnostics figure.
+    latency_ms: Mapped[float | None] = mapped_column(Float, nullable=True)
+    # list[{"port": int, "service": str}] from the most recent scan's
+    # `-O -F` pass (top-100 TCP ports). Only populated for hosts that
+    # answered the ping sweep — see scanner.py's two-phase design.
+    open_ports: Mapped[list | None] = mapped_column(JSONB, nullable=True)
     last_seen: Mapped["DateTime | None"] = mapped_column(DateTime(timezone=True), nullable=True)
     created_at: Mapped["DateTime"] = mapped_column(
         DateTime(timezone=True), server_default=func.now(), nullable=False

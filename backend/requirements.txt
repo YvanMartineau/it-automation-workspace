@@ -280,6 +280,10 @@ propcache==0.5.2
     #   -r backend/requirements.txt
     #   aiohttp
     #   yarl
+psutil==6.0.0
+    # via
+    #   -r backend/requirements.txt
+    #   uvicorn
 pyasn1==0.6.3
     # via
     #   -r backend/requirements.txt
