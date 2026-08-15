@@ -145,7 +145,14 @@ def _parse_os_and_ports(nm: nmap.PortScanner, host: str) -> tuple[str | None, li
         if port_data.get("state") == "open":
             open_ports.append({"port": port_num, "service": port_data.get("name", "unknown")})
 
-    return os_info, (open_ports or None)
+    # Deliberately NOT collapsing an empty list to None here. A host that
+    # was actually scanned and has zero open ports among the top 100
+    # ("[]" — a real, meaningful result) must stay distinguishable from a
+    # host that was never port-scanned at all ("None" — offline, or the
+    # phase-2 nmap call failed). Collapsing both to None would make
+    # `open_ports IS NULL` in a later query silently mean two different
+    # things.
+    return os_info, open_ports
 
 
 # ---------------------------------------------------------------------------
