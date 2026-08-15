@@ -1,9 +1,7 @@
 """Pydantic v2 schemas for Device endpoints."""
 import uuid
 from datetime import datetime
-
 from pydantic import BaseModel, ConfigDict, Field
-
 from models.device import DeviceStatus
 
 
@@ -39,6 +37,10 @@ class DeviceRead(BaseModel):
     cpu_percent: float | None
     memory_percent: float | None
     os_info: str | None
+    # Both scan-derived — see services/scanner.py and the column comments
+    # on models/device.py for exactly how/when these get populated.
+    latency_ms: float | None
+    open_ports: list[dict] | None
     last_seen: datetime | None
     created_at: datetime
     updated_at: datetime | None
