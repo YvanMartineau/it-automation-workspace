@@ -6,6 +6,7 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
     libpango-1.0-0 \
     libharfbuzz0b \
     libpangoft2-1.0-0 \
+    libcap2-bin \
     && rm -rf /var/lib/apt/lists/*
 # Grants nmap's binary the raw-socket capability directly, so appuser
 # (non-root) can still do ARP/ICMP-based discovery. cap_add on the
