@@ -2,15 +2,17 @@
 """
 Device management endpoints:
 
-GET   /devices        — list, filterable by status, paginated
-POST  /devices        — create (admin only), writes audit log
-PATCH /devices/{id}   — partial update (admin only), writes audit log
+GET    /devices        — paginated, filterable list (search/status/os)
+POST   /devices        — create (admin only), writes audit log
+PATCH  /devices/{id}   — partial update (admin only), writes audit log
+DELETE /devices/{id}   — delete (admin only), writes audit log
 
 Route handlers here do only three things: validate input, call
 services/device_service.py, and shape the HTTP response. Query building,
 persistence, and audit logging live in the service layer.
 """
 
+import math
 import uuid
 
 from fastapi import APIRouter, Depends, HTTPException, Query, status
@@ -19,7 +21,13 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from db.engine import get_db
 from models.device import DeviceStatus
 from models.user import User
-from schemas.device import DeviceCreate, DeviceRead, DeviceUpdate
+from schemas.device import (
+    DeviceCreate,
+    DeviceRead,
+    DeviceUpdate,
+    PaginatedDeviceList,
+    PaginationMeta,
+)
 from security.jwt_handler import get_admin_user, get_current_user
 from services.device_service import (
     DeviceConflictError,
@@ -27,26 +35,37 @@ from services.device_service import (
     NoUpdateFieldsError,
 )
 from services.device_service import create_device as create_device_service
-from services.device_service import list_devices as list_devices_service
+from services.device_service import delete_device as delete_device_service
+from services.device_service import list_devices_paginated
 from services.device_service import update_device as update_device_service
 
 router = APIRouter()
 
 
-@router.get("/", response_model=list[DeviceRead], summary="List devices")
+@router.get("/", response_model=PaginatedDeviceList, summary="List devices (paginated, filterable)")
 async def list_devices(
     status_filter: DeviceStatus | None = Query(default=None, alias="status"),
-    limit: int = Query(default=100, le=500),
-    offset: int = Query(default=0, ge=0),
+    search: str | None = Query(default=None, description="Matches hostname, IP, or MAC"),
+    os: str | None = Query(default=None, description="Substring match against os_info"),
+    page: int = Query(default=1, ge=1),
+    page_size: int = Query(default=25, ge=1, le=500, alias="pageSize"),
     db: AsyncSession = Depends(get_db),
     current_user: User = Depends(get_current_user),
-) -> list[DeviceRead]:
+) -> PaginatedDeviceList:
     """
-    List devices with optional status filter and pagination.
-    Requires an authenticated user; no role escalation here.
+    List devices with optional status/search/OS filters, paginated.
+    Requires an authenticated user; no role escalation here — matches the
+    access level of the original unpaginated endpoint.
     """
-    devices = await list_devices_service(db, status_filter, limit, offset)
-    return [DeviceRead.model_validate(d) for d in devices]
+    devices, total_items = await list_devices_paginated(
+        db, status_filter=status_filter, search=search, os_filter=os, page=page, page_size=page_size
+    )
+    total_pages = math.ceil(total_items / page_size) if total_items else 0
+
+    return PaginatedDeviceList(
+        data=[DeviceRead.model_validate(d) for d in devices],
+        meta=PaginationMeta(page=page, pageSize=page_size, totalPages=total_pages, totalItems=total_items),
+    )
 
 
 @router.post(
@@ -100,3 +119,24 @@ async def update_device(
         )
 
     return DeviceRead.model_validate(device)
+
+
+@router.delete("/{device_id}", status_code=status.HTTP_204_NO_CONTENT, summary="Delete a device (admin only)")
+async def delete_device(
+    device_id: uuid.UUID,
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(get_admin_user),
+) -> None:
+    """
+    Delete a device.
+    Admin-only; handles missing devices with 404. Writes an audit entry
+    (with the device's ip/hostname captured before deletion) — see
+    services/device_service.py's delete_device.
+    """
+    try:
+        await delete_device_service(db, current_user.email, device_id)
+    except DeviceNotFoundError:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="Device not found",
+        )

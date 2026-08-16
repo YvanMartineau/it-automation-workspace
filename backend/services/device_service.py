@@ -10,7 +10,7 @@ appropriate HTTPException.
 
 import uuid
 
-from sqlalchemy import select
+from sqlalchemy import func, or_, select
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.ext.asyncio import AsyncSession
 
@@ -35,20 +35,57 @@ class NoUpdateFieldsError(Exception):
     """Raised when a PATCH body contains no fields to update."""
 
 
-async def list_devices(
+async def list_devices_paginated(
     db: AsyncSession,
     status_filter: DeviceStatus | None,
-    limit: int,
-    offset: int,
-) -> list[Device]:
-    """List devices with optional status filter and pagination."""
-    query = select(Device)
-    if status_filter is not None:
-        query = query.where(Device.status == status_filter)
-    query = query.order_by(Device.hostname).limit(limit).offset(offset)
+    search: str | None,
+    os_filter: str | None,
+    page: int,
+    page_size: int,
+) -> tuple[list[Device], int]:
+    """
+    List devices with optional status/search/OS filters, paginated, plus
+    the total matching count. Replaces the old list_devices() (removed —
+    routers/devices.py's GET / now calls this instead, since the frontend
+    needs a real total for AssetPagination, which an unbounded
+    LIMIT/OFFSET list alone can't provide).
 
-    result = await db.execute(query)
-    return list(result.scalars().all())
+    Two queries, not one: SQLAlchemy has no single-round-trip way to get
+    both a LIMIT/OFFSET page and an unbounded COUNT(*) of the same
+    filtered set. Both share the same WHERE conditions, built once below,
+    so they can't drift out of sync with each other.
+    """
+    conditions = []
+    if status_filter is not None:
+        conditions.append(Device.status == status_filter)
+    if search:
+        pattern = f"%{search}%"
+        conditions.append(
+            or_(
+                Device.hostname.ilike(pattern),
+                Device.ip_address.ilike(pattern),
+                Device.mac_address.ilike(pattern),
+            )
+        )
+    if os_filter:
+        # os_info is nmap's free-text OS-match string (e.g. "Linux 5.X
+        # (88% confidence)") — substring match is the only filtering that
+        # makes sense against it; there's no clean enum column to match.
+        conditions.append(Device.os_info.ilike(f"%{os_filter}%"))
+
+    count_stmt = select(func.count()).select_from(Device)
+    list_stmt = select(Device).order_by(Device.hostname.asc().nulls_last())
+
+    if conditions:
+        count_stmt = count_stmt.where(*conditions)
+        list_stmt = list_stmt.where(*conditions)
+
+    total_items = (await db.execute(count_stmt)).scalar_one()
+
+    list_stmt = list_stmt.limit(page_size).offset((page - 1) * page_size)
+    devices = (await db.execute(list_stmt)).scalars().all()
+
+    return list(devices), total_items
 
 
 async def create_device(db: AsyncSession, actor: str, data: DeviceCreate) -> Device:
@@ -121,3 +158,26 @@ async def update_device(
     )
 
     return device
+
+
+async def delete_device(db: AsyncSession, actor: str, device_id: uuid.UUID) -> None:
+    """
+    Delete a device. Admin-only + audit-logged, same pattern as
+    create/update above. Audits BEFORE deleting, since the device's own
+    identifying details (ip/hostname) wouldn't exist to log afterward.
+    """
+    result = await db.execute(select(Device).where(Device.id == device_id))
+    device = result.scalar_one_or_none()
+    if device is None:
+        raise DeviceNotFoundError()
+
+    await write_audit_log(
+        db=db,
+        actor=actor,
+        action="device.delete",
+        target_type="device",
+        target_id=str(device_id),
+        payload={"ip_address": device.ip_address, "hostname": device.hostname},
+    )
+    await db.delete(device)
+    await db.commit()
