@@ -102,13 +102,13 @@ export function getAssetColumns(onDeleteAsset: (id: string) => void) {
     columnHelper.accessor("hostname", {
       header: "Hostname",
       cell: ({ getValue }) => <span className="truncate font-medium">{getValue() ?? "–"}</span>,
-      size: 200,
+      size: 300,
     }),
 
     columnHelper.accessor("ip_address", {
       header: "IP-Adresse",
       cell: ({ getValue }) => <span className="truncate font-mono text-xs">{getValue()}</span>,
-      size: 130,
+      size: 150,
     }),
 
     columnHelper.accessor("mac_address", {
@@ -116,7 +116,7 @@ export function getAssetColumns(onDeleteAsset: (id: string) => void) {
       cell: ({ getValue }) => (
         <span className="truncate font-mono text-xs text-muted-foreground">{getValue() ?? "–"}</span>
       ),
-      size: 150,
+      size: 180,
     }),
 
     columnHelper.accessor("os_info", {
@@ -126,7 +126,7 @@ export function getAssetColumns(onDeleteAsset: (id: string) => void) {
           {getValue() ?? "–"}
         </span>
       ),
-      size: 220,
+      size: 130,
     }),
 
     columnHelper.accessor("latency_ms", {
@@ -140,7 +140,7 @@ export function getAssetColumns(onDeleteAsset: (id: string) => void) {
           {formatLatency(getValue())}
         </span>
       ),
-      size: 90,
+      size: 100,
     }),
 
     columnHelper.accessor("cpu_percent", {
