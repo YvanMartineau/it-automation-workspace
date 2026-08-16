@@ -23,15 +23,8 @@ from models.user import User
 from security.jwt_handler import TokenError, create_access_token, create_refresh_token, decode_token
 from security.password_hashing import verify_password
 
-# Separate from "sysops.audit" (used by write_audit_log / audit_middleware)
-# on purpose: this logger carries high-frequency session telemetry, not
-# compliance-grade events. Keeping the logger names distinct means log
-# aggregation/alerting rules can target one without the other by name,
-# without having to parse the message body to tell them apart.
 logger = logging.getLogger("sysops.security")
 
-# Pre-computed bcrypt hash used to keep password verification timing constant
-# whether or not the email exists. Prevents user-enumeration via response timing.
 DUMMY_HASH = "$2b$12$eA3Vqb3j0zQ4yY1hZ.vQ7.bH9.3b3j0zQ4yY1hZ.vQ7.bH9.3b3j0"
 
 
@@ -72,7 +65,7 @@ async def authenticate_user(db: AsyncSession, email: str, password: str) -> User
 
 def issue_token_pair(user: User) -> tuple[str, str]:
     """Return (access_token, refresh_token) for an authenticated user."""
-    return create_access_token(user.id), create_refresh_token(user.id)
+    return create_access_token(user), create_refresh_token(user.id)
 
 
 async def rotate_access_token(db: AsyncSession, refresh_token: str) -> str:
@@ -104,18 +97,12 @@ async def rotate_access_token(db: AsyncSession, refresh_token: str) -> str:
     try:
         payload = decode_token(refresh_token, expected_type="refresh")
     except TokenError as err:
-        # No payload at all — could be an ordinary expiry (common) or a
-        # malformed/forged token (rare). Can't distinguish without a
-        # payload, so actor stays "unknown".
         await write_audit_log(db, actor="unknown", action="auth.refresh.failed")
         raise InvalidRefreshTokenError() from err
 
     try:
         user_id = UUID(payload.sub)
     except ValueError as err:
-        # Signature verified, but the claim inside a validly-signed token
-        # is malformed — a stronger signal than a bare expiry. Logged
-        # with the raw, unresolved claim since it doesn't map to a real id.
         await write_audit_log(db, actor=payload.sub, action="auth.refresh.failed")
         raise InvalidRefreshTokenError() from err
 
@@ -130,12 +117,14 @@ async def rotate_access_token(db: AsyncSession, refresh_token: str) -> str:
         await write_audit_log(db, actor=user.email, action="auth.refresh.failed")
         raise InvalidRefreshTokenError()
 
-    # Success path: structured log only — deliberately not write_audit_log().
     logger.info(
         "AUTH REFRESH SUCCESS",
         extra={"actor": user.email, "action": "auth.refresh"},
     )
-    return create_access_token(user.id)
+    # Reissue with the user's CURRENT role/email, not whatever was true at
+    # original login — if a role changed mid-session, the next refresh
+    # (at most ACCESS_TOKEN_EXPIRE_MINUTES later) picks it up.
+    return create_access_token(user)
 
 
 async def record_logout(db: AsyncSession, access_token: str | None) -> None:

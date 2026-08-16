@@ -9,6 +9,17 @@
  * for this endpoint. This reads the same text/event-stream wire format
  * over fetch() + ReadableStream instead.
  *
+ * LINE-ENDING NORMALIZATION (bug fix): sse-starlette's EventSourceResponse
+ * encodes frames with "\r\n" line separators (blank line = "\r\n\r\n"),
+ * not the bare "\n\n" this file originally assumed — which meant frame
+ * boundaries never matched and onFrame silently never fired, with no
+ * error anywhere (confirmed via nmap-scan test run: SSE connection
+ * succeeded, 200 OK, but the UI never updated). Normalizing "\r\n" -> "\n"
+ * on the ACCUMULATED buffer (not the raw incoming chunk) before searching
+ * for boundaries handles both delimiter styles, and also correctly
+ * handles a "\r\n" pair getting split across two separate stream chunks,
+ * since the replace runs after concatenation, not before.
+ *
  * WHY NO AUTO-RECONNECT: job_store's queue (services/scanner.py) is a
  * single-consumer asyncio.Queue with no event replay. A second reader
  * attaching to the same job_id would compete with the first for events
@@ -62,10 +73,11 @@ export function openEventStream(
         if (done) break;
 
         buffer += decoder.decode(value, { stream: true });
+        // Normalize AFTER concatenation, not before — a "\r\n" pair that
+        // arrives split across two chunks (\r in one, \n in the next)
+        // only becomes a matchable pair once both halves are in `buffer`.
+        buffer = buffer.replace(/\r\n/g, "\n");
 
-        // Frames are separated by a blank line. Process every complete
-        // frame in the buffer; leave a trailing partial frame for the
-        // next chunk.
         let boundary: number;
         while ((boundary = buffer.indexOf("\n\n")) !== -1) {
           const rawFrame = buffer.slice(0, boundary);

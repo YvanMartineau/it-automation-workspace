@@ -44,7 +44,21 @@ REFRESH_COOKIE_MAX_AGE = settings.REFRESH_TOKEN_EXPIRE_DAYS * 24 * 60 * 60
 def _set_refresh_cookie(response: Response, token: str) -> None:
     """
     Set the refresh token cookie with secure defaults.
-    Cookie is HTTP-only, Secure, SameSite=Strict, and scoped to /auth.
+    Cookie is HTTP-only, Secure, SameSite=Strict.
+
+    NOT path-scoped to /auth (as it was before): the frontend calls this
+    through a same-origin proxy (baseURL "/api", rewritten to the
+    backend's root-mounted routes — see main.py, no /api prefix exists
+    server-side). The browser decides whether to attach a cookie based on
+    the REQUEST path it itself sent (/api/auth/refresh), never the
+    backend's internal route after proxy rewriting. A cookie scoped to
+    path="/auth" therefore never matches /api/auth/refresh and silently
+    never gets sent back — this was causing every refresh to 401 with
+    "Missing refresh token" regardless of anything client-side. Default
+    path (root) sidesteps needing this file to know the proxy's exact
+    rewrite rule at all. HttpOnly + Secure + SameSite=Strict already
+    provide the real protection; path scoping here was a marginal
+    optimization not worth the coupling.
     """
     response.set_cookie(
         key=REFRESH_COOKIE_NAME,
@@ -53,7 +67,6 @@ def _set_refresh_cookie(response: Response, token: str) -> None:
         secure=True,
         samesite="strict",
         max_age=REFRESH_COOKIE_MAX_AGE,
-        path="/auth",
     )
 
 
@@ -149,12 +162,9 @@ async def logout(
     response: Response,
     db: AsyncSession = Depends(get_db),
 ) -> None:
-    """
-    Log out by clearing the refresh token cookie.
-    Stateless: access tokens simply expire; no server-side revocation list.
-    Always succeeds regardless of whether a valid access token is present —
-    see record_logout() in auth_service.py for how the audit actor is
-    best-effort resolved without ever gating the response on it.
-    """
+    # in logout(): delete_cookie's path MUST match the path the cookie was
+    # SET with, or the browser treats it as a different cookie and leaves
+    # the original sitting there un-deleted. Keeping this in lockstep with
+    # _set_refresh_cookie above rather than hardcoding independently.
     await record_logout(db, _extract_bearer_token(request))
-    response.delete_cookie(key=REFRESH_COOKIE_NAME, path="/auth")
+    response.delete_cookie(key=REFRESH_COOKIE_NAME)
