@@ -12,10 +12,7 @@ import { AuditLogTable } from "#/components/data-display/AuditLogTable";
 import { AuditLogPagination } from "#/components/data-display/AuditLogPagination";
 import type { AuditLogFilters } from "#/types/audit-log";
 
-const DEFAULT_FILTERS: AuditLogFilters = {
-  action: "all",
-  resourceType: "all",
-};
+const DEFAULT_FILTERS: AuditLogFilters = {};
 
 export default function AuditLogs() {
   const [filters, setFilters] = useState<AuditLogFilters>(DEFAULT_FILTERS);

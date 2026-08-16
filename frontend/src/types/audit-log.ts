@@ -37,12 +37,15 @@ export interface AuditLog {
   readonly userAgent?: string;
 }
 
+/**
+ * Multi-select filters: empty array or undefined means "all".
+ */
 export interface AuditLogFilters {
   readonly startDate?: string; // YYYY-MM-DD
   readonly endDate?: string; // YYYY-MM-DD
-  readonly actor?: string;
-  readonly action: AuditAction | "all";
-  readonly resourceType: ResourceType | "all";
+  readonly actors?: readonly string[];
+  readonly actions?: readonly AuditAction[];
+  readonly resourceTypes?: readonly ResourceType[];
 }
 
 export interface CursorPaginationMeta {
