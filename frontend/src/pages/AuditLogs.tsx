@@ -1,6 +1,6 @@
 /**
  * Audit Log Viewer Page
- * Immutable, append-only audit trail with cursor pagination and diff view.
+ * Immutable, append-only audit trail with offset pagination.
  * @module pages/AuditLogs
  */
 
@@ -13,44 +13,34 @@ import { AuditLogPagination } from "#/components/data-display/AuditLogPagination
 import type { AuditLogFilters } from "#/types/audit-log";
 
 const DEFAULT_FILTERS: AuditLogFilters = {};
+const LIMIT = 25;
 
 export default function AuditLogs() {
   const [filters, setFilters] = useState<AuditLogFilters>(DEFAULT_FILTERS);
-  const [cursor, setCursor] = useState<string | null>(null);
-  const [cursorHistory, setCursorHistory] = useState<(string | null)[]>([]);
+  const [offset, setOffset] = useState(0);
 
-  const { data, isLoading, isFetching } = useAuditLogs(filters, cursor);
+  const { data, isLoading, isFetching } = useAuditLogs(filters, offset);
 
   const logs = useMemo(() => data?.data ?? [], [data?.data]);
+  const hasMore = data?.meta.hasMore ?? false;
 
   const handleFiltersChange = useCallback((newFilters: AuditLogFilters) => {
     setFilters(newFilters);
-    setCursor(null);
-    setCursorHistory([]);
+    setOffset(0);
   }, []);
 
   const handleReset = useCallback(() => {
     setFilters(DEFAULT_FILTERS);
-    setCursor(null);
-    setCursorHistory([]);
+    setOffset(0);
   }, []);
 
   const handleNext = useCallback(() => {
-    if (!data?.meta.nextCursor) return;
-    setCursorHistory((prev) => [...prev, cursor]);
-    setCursor(data.meta.nextCursor);
-  }, [data?.meta.nextCursor, cursor]);
+    setOffset((prev) => prev + LIMIT);
+  }, []);
 
   const handlePrevious = useCallback(() => {
-    if (cursorHistory.length === 0) return;
-    const newHistory = [...cursorHistory];
-    const previousCursor = newHistory.pop() ?? null;
-    setCursorHistory(newHistory);
-    setCursor(previousCursor);
-  }, [cursorHistory]);
-
-  const hasMore = data?.meta.hasMore ?? false;
-  const canGoBack = cursorHistory.length > 0;
+    setOffset((prev) => Math.max(0, prev - LIMIT));
+  }, []);
 
   return (
     <div className="space-y-6">
@@ -82,8 +72,10 @@ export default function AuditLogs() {
 
       {!isLoading && logs.length > 0 && (
         <AuditLogPagination
+          offset={offset}
+          limit={LIMIT}
+          itemCount={logs.length}
           hasMore={hasMore}
-          canGoBack={canGoBack}
           onNext={handleNext}
           onPrevious={handlePrevious}
           isFetching={isFetching}

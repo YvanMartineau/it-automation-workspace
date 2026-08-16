@@ -1,6 +1,6 @@
 /**
  * Filter bar and export controls for the audit log viewer.
- * Multi-select dropdowns using DropdownMenu (Base UI) — proven freeze-free.
+ * Multi-select dropdowns using DropdownMenu (Base UI).
  * @module components/data-display/AuditLogToolbar
  */
 
@@ -57,7 +57,7 @@ function downloadCsv(rows: readonly AuditLog[]) {
     return;
   }
 
-  const headers = ["Zeitstempel", "Akteur", "Aktion", "Ressource", "Ressourcen-ID", "IP-Adresse"];
+  const headers = ["Zeitstempel", "Akteur", "Aktion", "Ressource", "Ressourcen-ID"];
   const csvContent = [
     headers.join(";"),
     ...rows.map((row) =>
@@ -65,9 +65,8 @@ function downloadCsv(rows: readonly AuditLog[]) {
         row.timestamp,
         row.actor,
         row.action,
-        row.resourceType,
-        row.resourceId,
-        row.ipAddress ?? "",
+        row.targetType ?? "",
+        row.targetId ?? "",
       ].join(";")
     ),
   ].join("\n");
@@ -84,10 +83,6 @@ function downloadCsv(rows: readonly AuditLog[]) {
   toast.success("CSV-Export heruntergeladen");
 }
 
-/**
- * Multi-select filter using DropdownMenuCheckboxItem.
- * Keeps menu open while toggling (onSelect preventDefault).
- */
 function MultiSelectFilter<T extends string>({
   label,
   options,
@@ -105,9 +100,7 @@ function MultiSelectFilter<T extends string>({
 
   const toggle = useCallback(
     (value: T) => {
-      onChange(
-        values.includes(value) ? values.filter((v) => v !== value) : [...values, value]
-      );
+      onChange(values.includes(value) ? values.filter((v) => v !== value) : [...values, value]);
     },
     [values, onChange]
   );
@@ -128,16 +121,9 @@ function MultiSelectFilter<T extends string>({
       <DropdownMenu>
         <DropdownMenuTrigger
           render={
-            <Button
-              variant="outline"
-              size="sm"
-              className="w-full min-w-[180px] justify-between gap-2"
-            >
+            <Button variant="outline" size="sm" className="w-full min-w-[180px] justify-between gap-2">
               <span className="truncate">{display}</span>
-              <ChevronDown
-                className="h-4 w-4 shrink-0 text-muted-foreground"
-                aria-hidden="true"
-              />
+              <ChevronDown className="h-4 w-4 shrink-0 text-muted-foreground" aria-hidden="true" />
             </Button>
           }
         />
@@ -175,12 +161,8 @@ export function AuditLogToolbar({
     <div className="flex flex-col gap-4 rounded-lg border bg-card p-4">
       <div className="flex flex-col gap-4 lg:flex-row lg:items-end lg:justify-between">
         <div className="flex flex-wrap items-end gap-3">
-          {/* Date range */}
           <div className="space-y-1.5">
-            <label
-              htmlFor="audit-start-date"
-              className="text-xs font-medium text-muted-foreground"
-            >
+            <label htmlFor="audit-start-date" className="text-xs font-medium text-muted-foreground">
               Von
             </label>
             <input
@@ -193,10 +175,7 @@ export function AuditLogToolbar({
           </div>
 
           <div className="space-y-1.5">
-            <label
-              htmlFor="audit-end-date"
-              className="text-xs font-medium text-muted-foreground"
-            >
+            <label htmlFor="audit-end-date" className="text-xs font-medium text-muted-foreground">
               Bis
             </label>
             <input
@@ -238,12 +217,7 @@ export function AuditLogToolbar({
             <RotateCcw className="h-4 w-4" aria-hidden="true" />
             Zurücksetzen
           </Button>
-          <Button
-            variant="outline"
-            size="sm"
-            onClick={() => downloadCsv(data)}
-            className="gap-2"
-          >
+          <Button variant="outline" size="sm" onClick={() => downloadCsv(data)} className="gap-2">
             <Download className="h-4 w-4" aria-hidden="true" />
             CSV Export
           </Button>
