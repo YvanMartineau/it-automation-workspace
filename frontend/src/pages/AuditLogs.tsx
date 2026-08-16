@@ -4,7 +4,7 @@
  * @module pages/AuditLogs
  */
 
-import { useState, useCallback } from "react";
+import { useState, useCallback, useMemo } from "react";
 import { ShieldCheck } from "lucide-react";
 import { useAuditLogs } from "#/hooks/useAuditLogs";
 import { AuditLogToolbar } from "#/components/data-display/AuditLogToolbar";
@@ -20,9 +20,11 @@ const DEFAULT_FILTERS: AuditLogFilters = {
 export default function AuditLogs() {
   const [filters, setFilters] = useState<AuditLogFilters>(DEFAULT_FILTERS);
   const [cursor, setCursor] = useState<string | null>(null);
-  const [cursorHistory, setCursorHistory] = useState<string[]>([]);
+  const [cursorHistory, setCursorHistory] = useState<(string | null)[]>([]);
 
   const { data, isLoading, isFetching } = useAuditLogs(filters, cursor);
+
+  const logs = useMemo(() => data?.data ?? [], [data?.data]);
 
   const handleFiltersChange = useCallback((newFilters: AuditLogFilters) => {
     setFilters(newFilters);
@@ -38,26 +40,18 @@ export default function AuditLogs() {
 
   const handleNext = useCallback(() => {
     if (!data?.meta.nextCursor) return;
-
-    setCursorHistory((prev) => {
-      const next = cursor === null ? prev : [...prev, cursor];
-      return next;
-    });
+    setCursorHistory((prev) => [...prev, cursor]);
     setCursor(data.meta.nextCursor);
   }, [data?.meta.nextCursor, cursor]);
 
   const handlePrevious = useCallback(() => {
-    setCursorHistory((prev) => {
-      if (prev.length === 0) return prev;
-      const newHistory = [...prev];
-      const previousCursor = newHistory.pop()!;
-      // Schedule cursor update in the next tick to avoid updater-in-updater anti-pattern
-      setCursor(previousCursor);
-      return newHistory;
-    });
-  }, []);
+    if (cursorHistory.length === 0) return;
+    const newHistory = [...cursorHistory];
+    const previousCursor = newHistory.pop() ?? null;
+    setCursorHistory(newHistory);
+    setCursor(previousCursor);
+  }, [cursorHistory]);
 
-  const logs = data?.data ?? [];
   const hasMore = data?.meta.hasMore ?? false;
   const canGoBack = cursorHistory.length > 0;
 

@@ -1,10 +1,11 @@
 /**
  * TanStack Table v8 implementation for audit logs.
  * Supports row expansion for diff view.
+ * Performance: memoized data reference, React.memo wrapper, stable row IDs.
  * @module components/data-display/AuditLogTable
  */
 
-import { useMemo, useState } from "react";
+import React, { useMemo, useState } from "react";
 import {
   type ColumnDef,
   type ExpandedState,
@@ -80,114 +81,114 @@ interface AuditLogTableProps {
   readonly isLoading: boolean;
 }
 
-export function AuditLogTable({ data, isLoading }: AuditLogTableProps) {
+const COLUMNS: ColumnDef<AuditLog>[] = [
+  {
+    id: "expander",
+    header: () => null,
+    cell: ({ row }) =>
+      row.original.diff ? (
+        <Button
+          variant="ghost"
+          size="sm"
+          className="h-8 w-8 p-0"
+          onClick={() => row.toggleExpanded()}
+          aria-label={row.getIsExpanded() ? "Details einklappen" : "Details ausklappen"}
+          aria-expanded={row.getIsExpanded()}
+        >
+          {row.getIsExpanded() ? (
+            <ChevronDown className="h-4 w-4" aria-hidden="true" />
+          ) : (
+            <ChevronRight className="h-4 w-4" aria-hidden="true" />
+          )}
+        </Button>
+      ) : null,
+    size: 40,
+  },
+  {
+    accessorKey: "timestamp",
+    header: "Zeitstempel",
+    cell: ({ getValue }) => {
+      const value = getValue() as string;
+      return (
+        <span className="tabular-nums text-muted-foreground">
+          {formatTimestamp(value)}
+        </span>
+      );
+    },
+    size: 180,
+  },
+  {
+    accessorKey: "actor",
+    header: "Akteur",
+    cell: ({ getValue }) => {
+      const value = getValue() as string;
+      return <span className="font-medium">{value}</span>;
+    },
+    size: 200,
+  },
+  {
+    accessorKey: "action",
+    header: "Aktion",
+    cell: ({ getValue }) => {
+      const action = getValue() as AuditAction;
+      return (
+        <Badge variant="secondary" className={`${getActionColor(action)} border-0`}>
+          {getActionLabel(action)}
+        </Badge>
+      );
+    },
+    size: 160,
+  },
+  {
+    accessorKey: "resourceType",
+    header: "Ressource",
+    cell: ({ getValue }) => {
+      const type = getValue() as ResourceType;
+      return (
+        <span className="text-muted-foreground">
+          {getResourceTypeLabel(type)}
+        </span>
+      );
+    },
+    size: 120,
+  },
+  {
+    accessorKey: "resourceId",
+    header: "Ressourcen-ID",
+    cell: ({ getValue }) => {
+      const value = getValue() as string;
+      return (
+        <code className="rounded bg-muted px-1.5 py-0.5 text-xs font-mono">
+          {value}
+        </code>
+      );
+    },
+    size: 140,
+  },
+  {
+    accessorKey: "ipAddress",
+    header: "IP-Adresse",
+    cell: ({ getValue }) => {
+      const value = getValue() as string | undefined;
+      return (
+        <span className="tabular-nums text-muted-foreground text-xs">
+          {value ?? "—"}
+        </span>
+      );
+    },
+    size: 130,
+  },
+];
+
+function AuditLogTableInner({ data, isLoading }: AuditLogTableProps) {
   const [expanded, setExpanded] = useState<ExpandedState>({});
 
-  const columns = useMemo<ColumnDef<AuditLog>[]>(
-    () => [
-      {
-        id: "expander",
-        header: () => null,
-        cell: ({ row }) =>
-          row.original.diff ? (
-            <Button
-              variant="ghost"
-              size="sm"
-              className="h-8 w-8 p-0"
-              onClick={() => row.toggleExpanded()}
-              aria-label={row.getIsExpanded() ? "Details einklappen" : "Details ausklappen"}
-              aria-expanded={row.getIsExpanded()}
-            >
-              {row.getIsExpanded() ? (
-                <ChevronDown className="h-4 w-4" aria-hidden="true" />
-              ) : (
-                <ChevronRight className="h-4 w-4" aria-hidden="true" />
-              )}
-            </Button>
-          ) : null,
-        size: 40,
-      },
-      {
-        accessorKey: "timestamp",
-        header: "Zeitstempel",
-        cell: ({ getValue }) => {
-          const value = getValue() as string;
-          return (
-            <span className="tabular-nums text-muted-foreground">
-              {formatTimestamp(value)}
-            </span>
-          );
-        },
-        size: 180,
-      },
-      {
-        accessorKey: "actor",
-        header: "Akteur",
-        cell: ({ getValue }) => {
-          const value = getValue() as string;
-          return <span className="font-medium">{value}</span>;
-        },
-        size: 200,
-      },
-      {
-        accessorKey: "action",
-        header: "Aktion",
-        cell: ({ getValue }) => {
-          const action = getValue() as AuditAction;
-          return (
-            <Badge variant="secondary" className={`${getActionColor(action)} border-0`}>
-              {getActionLabel(action)}
-            </Badge>
-          );
-        },
-        size: 160,
-      },
-      {
-        accessorKey: "resourceType",
-        header: "Ressource",
-        cell: ({ getValue }) => {
-          const type = getValue() as ResourceType;
-          return (
-            <span className="text-muted-foreground">
-              {getResourceTypeLabel(type)}
-            </span>
-          );
-        },
-        size: 120,
-      },
-      {
-        accessorKey: "resourceId",
-        header: "Ressourcen-ID",
-        cell: ({ getValue }) => {
-          const value = getValue() as string;
-          return (
-            <code className="rounded bg-muted px-1.5 py-0.5 text-xs font-mono">
-              {value}
-            </code>
-          );
-        },
-        size: 140,
-      },
-      {
-        accessorKey: "ipAddress",
-        header: "IP-Adresse",
-        cell: ({ getValue }) => {
-          const value = getValue() as string | undefined;
-          return (
-            <span className="tabular-nums text-muted-foreground text-xs">
-              {value ?? "—"}
-            </span>
-          );
-        },
-        size: 130,
-      },
-    ],
-    []
-  );
+  // Stable mutable copy: only recalculates when the actual data contents change
+  const tableData = useMemo(() => [...data], [data]);
 
   const table = useReactTable({
-    data: [...data], // ← FIX: shallow copy to satisfy TanStack Table's mutable requirement
-    columns,
+    data: tableData,
+    columns: COLUMNS,
     state: { expanded },
     onExpandedChange: setExpanded,
     getCoreRowModel: getCoreRowModel(),
@@ -241,9 +242,8 @@ export function AuditLogTable({ data, isLoading }: AuditLogTableProps) {
         </TableHeader>
         <TableBody>
           {table.getRowModel().rows.map((row) => (
-            <>
+            <React.Fragment key={row.id}>
               <TableRow
-                key={row.id}
                 data-state={row.getIsExpanded() ? "expanded" : undefined}
                 className="transition-colors hover:bg-muted/50"
               >
@@ -255,17 +255,19 @@ export function AuditLogTable({ data, isLoading }: AuditLogTableProps) {
               </TableRow>
               {row.getIsExpanded() && row.original.diff && (
                 <TableRow className="hover:bg-transparent">
-                  <TableCell colSpan={columns.length} className="p-0">
+                  <TableCell colSpan={COLUMNS.length} className="p-0">
                     <div className="px-4 py-3">
                       <AuditLogDiff diff={row.original.diff} />
                     </div>
                   </TableCell>
                 </TableRow>
               )}
-            </>
+            </React.Fragment>
           ))}
         </TableBody>
       </Table>
     </div>
   );
 }
+
+export const AuditLogTable = React.memo(AuditLogTableInner);
