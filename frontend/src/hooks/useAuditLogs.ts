@@ -10,15 +10,7 @@ import type { AuditLog, AuditLogFilters, PaginatedAuditLogList } from "#/types/a
 
 const LIMIT = 25;
 
-const MOCK_ACTORS: readonly string[] = [
-  "admin@company.de",
-  "support@company.de",
-  "system",
-  "j.mueller@company.de",
-  "k.schmidt@company.de",
-];
-
-function mapBackendItem(raw: unknown): AuditLog {
+export function mapBackendItem(raw: unknown): AuditLog {
   const r = raw as Record<string, unknown>;
   return {
     id: String(r.id ?? ""),
@@ -45,21 +37,15 @@ export function useAuditLogs(filters: AuditLogFilters, offset: number) {
       params.set("limit", String(LIMIT));
       params.set("offset", String(offset));
 
-      const firstActor = filters.actors?.[0];
-      if (firstActor !== undefined) {
-        params.set("actor", firstActor);
+      if (filters.actor) {
+        params.set("actor", filters.actor);
       }
-
-      const firstAction = filters.actions?.[0];
-      if (firstAction !== undefined) {
-        params.set("action", firstAction);
+      if (filters.action) {
+        params.set("action", filters.action);
       }
-
-      const firstResourceType = filters.resourceTypes?.[0];
-      if (firstResourceType !== undefined) {
-        params.set("target_type", firstResourceType);
+      if (filters.resourceType) {
+        params.set("target_type", filters.resourceType);
       }
-
       if (filters.startDate) {
         params.set("date_from", `${filters.startDate}T00:00:00`);
       }
@@ -67,7 +53,6 @@ export function useAuditLogs(filters: AuditLogFilters, offset: number) {
         params.set("date_to", `${filters.endDate}T23:59:59`);
       }
 
-      // CRITICAL FIX: trailing slash to avoid FastAPI 307 redirect that drops auth headers
       const response = await api.get<unknown[]>(`/audit-logs/?${params.toString()}`);
       const data = response.data.map(mapBackendItem);
 
@@ -86,5 +71,4 @@ export function useAuditLogs(filters: AuditLogFilters, offset: number) {
   });
 }
 
-export { MOCK_ACTORS };
 export type { AuditLogFilters };
