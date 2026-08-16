@@ -17,6 +17,7 @@ this file that raises HTTPException.
 
 from datetime import datetime, timedelta, timezone
 from enum import Enum
+from typing import Any
 from uuid import UUID
 
 from fastapi import Depends, HTTPException, status
@@ -57,26 +58,56 @@ class TokenPayload:
         self.exp = exp          # expiration as Unix timestamp (int)
 
 
-def _create_token(subject: str, expires_delta: timedelta, token_type: str) -> str:
+def _create_token(
+    subject: str,
+    expires_delta: timedelta,
+    token_type: str,
+    extra_claims: dict[str, Any] | None = None,
+) -> str:
     now = datetime.now(timezone.utc)
-    payload = {
+    payload: dict[str, Any] = {
         "sub": subject,
         "type": token_type,
         "iat": now,
         "exp": now + expires_delta,
     }
+    if extra_claims:
+        payload.update(extra_claims)
     return jwt.encode(payload, settings.JWT_SECRET_KEY, algorithm=settings.JWT_ALGORITHM)
 
 
-def create_access_token(user_id: UUID) -> str:
+def create_access_token(user: User) -> str:
+    """
+    Access tokens carry role and email as extra claims, on top of the
+    standard sub/type/iat/exp — the frontend (useAuth.ts / jwt.ts) decodes
+    these client-side to populate its auth store without a second round
+    trip. Both call sites (issue_token_pair on login, rotate_access_token
+    on refresh) already have the full User loaded from the DB at the
+    point they call this, so no extra query is introduced by requiring
+    the full object here instead of just user.id.
+
+    Role is read the same defensive way get_admin_user() already does
+    (Enum-or-string), so a change to how models.user.User.role is typed
+    doesn't require touching both places.
+    """
+    role_value = user.role.value if isinstance(user.role, Enum) else str(user.role)
     return _create_token(
-        subject=str(user_id),
+        subject=str(user.id),
         expires_delta=timedelta(minutes=settings.ACCESS_TOKEN_EXPIRE_MINUTES),
         token_type="access",
+        extra_claims={"role": role_value, "email": user.email},
     )
 
 
 def create_refresh_token(user_id: UUID) -> str:
+    """
+    Deliberately NOT given role/email claims. Refresh tokens are
+    long-lived and only ever used to mint a new access token (see
+    rotate_access_token) — they're never read for authorization
+    decisions themselves, so there's no reason for them to carry data
+    that can go stale (e.g. a role change) for up to
+    REFRESH_TOKEN_EXPIRE_DAYS before it matters again.
+    """
     return _create_token(
         subject=str(user_id),
         expires_delta=timedelta(days=settings.REFRESH_TOKEN_EXPIRE_DAYS),

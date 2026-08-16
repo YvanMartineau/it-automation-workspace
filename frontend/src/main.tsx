@@ -5,6 +5,7 @@ import { ReactQueryDevtools } from "@tanstack/react-query-devtools";
 import { RouterProvider } from "react-router-dom";
 import { ThemeProvider } from "#/components/layout/ThemeProvider";
 import { Toaster } from "#/components/ui/sonner";
+import { AuthBootstrapGate } from "#/components/navigation/AuthBootstrapGate";
 import { router } from "#/App";
 import "#/index.css";
 
@@ -29,8 +30,10 @@ ReactDOM.createRoot(document.getElementById("root")!).render(
   <React.StrictMode>
     <ThemeProvider defaultTheme="system" storageKey="it-dashboard-theme" attribute="class" enableSystem={true} disableTransitionOnChange={false}>
       <QueryClientProvider client={queryClient}>
-        <RouterProvider router={router} />
-        <Toaster 
+        <AuthBootstrapGate>
+          <RouterProvider router={router} />
+        </AuthBootstrapGate>
+        <Toaster
           position="top-right"
           richColors
           closeButton
