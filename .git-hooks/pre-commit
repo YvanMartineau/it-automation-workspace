@@ -5,8 +5,8 @@
 #  Guarantees: every check reports PASS/FAIL explicitly.
 #
 #  CROSS-PLATFORM NOTES (Windows Git Bash / MSYS2 / WSL):
-#    - Uses 'npx' directly (Node resolves the binary via node_modules/.bin)
-#    - Avoids 'command -v npx' which can alias to Windows HELP on MSYS2
+#    - Uses node directly via node_modules/.bin/eslint to bypass npx wrapper issues on Windows
+#    - Properly quotes directory paths containing spaces
 #    - All grep patterns are single-quoted to prevent --flag interpretation
 # ============================================================
 
@@ -136,8 +136,6 @@ done <<< "${STAGED_FILES}"
 # ── 4/9 Hardcoded secret pattern scan ────────────────────────
 header "[4/9] Hardcoded secret pattern scan"
 
-# NOTE: Patterns are single-quoted to prevent shell expansion and grep flag interpretation.
-# The -----BEGIN PRIVATE KEY----- pattern is especially fragile because it starts with dashes.
 SECRET_PATTERNS=(
   "['\"]?(password|passwd|secret|token|api[_-]?key)['\"]?\s*[:=]\s*['\"][^'\"]{4,}"
   "^(PASSWORD|SECRET|TOKEN|API_KEY|SENDGRID_API_KEY|SMTP_PASSWORD)=[^[:space:]]{4,}"
@@ -159,7 +157,6 @@ while IFS= read -r file; do
 
   if safe_run file "$file" | grep -qiE "text|utf-8"; then
     for pattern in "${SECRET_PATTERNS[@]}"; do
-      # Use -- before pattern to prevent grep from interpreting leading dashes as flags
       if safe_run git show ":$file" | grep -Ei -- "$pattern" >/dev/null; then
         fail "Possible hardcoded secret in '$file' (pattern: $pattern)"
         SECRET_FOUND=1
@@ -267,23 +264,18 @@ TS_STAGED="$(echo "${STAGED_FILES}" | grep -E "\.(ts|tsx)$" || true)"
 TS_FAIL=0
 
 if [[ -n "${TS_STAGED}" ]]; then
-  # Sanity check: is Node available and can it resolve eslint?
   if ! safe_run node --version >/dev/null 2>&1; then
     fail "Node.js not found in PATH — cannot run ESLint"
     TS_FAIL=1
-  # Check if node_modules exists (npm install has been run)
   elif [[ ! -d "${FRONTEND_DIR}/node_modules" ]]; then
     fail "frontend/node_modules missing — run: cd ${FRONTEND_DIR} && npm install"
     TS_FAIL=1
   else
-    # Strip the "frontend/" prefix so paths are relative to FRONTEND_DIR,
-    # since we cd into it before invoking eslint.
+    # Format staged files relative to frontend/
     TS_ARGS="$(echo "${TS_STAGED}" | sed "s|^${FRONTEND_DIR}/||" | tr '\n' ' ')"
 
-    # Run eslint via npx from inside the frontend directory.
-    # We use 'bash -c' to ensure the cd is scoped, but npx should resolve
-    # correctly because node_modules/.bin is in the PATH when inside the dir.
-    if safe_run bash -c "cd ${FRONTEND_DIR} && npx eslint ${TS_ARGS} --quiet"; then
+    # Bypass .cmd wrapper on Windows by calling node directly on the JS entrypoint
+    if (cd "${FRONTEND_DIR}" && safe_run node "./node_modules/eslint/bin/eslint.js" ${TS_ARGS} --quiet); then
       ok "ESLint passed on staged TypeScript files"
     else
       fail "ESLint found issues — run: cd ${FRONTEND_DIR} && npm run lint"
