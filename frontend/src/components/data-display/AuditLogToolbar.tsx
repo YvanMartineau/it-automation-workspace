@@ -1,18 +1,23 @@
 /**
  * Filter bar and export controls for the audit log viewer.
- * Uses native <select> to avoid Base UI focus-loop freezes.
+ * Multi-select dropdowns using DropdownMenu (Base UI) — proven freeze-free.
  * @module components/data-display/AuditLogToolbar
  */
 
-import { useCallback } from "react";
-import { Download, RotateCcw } from "lucide-react";
+import { useCallback, useMemo } from "react";
+import { ChevronDown, Download, RotateCcw } from "lucide-react";
 import { toast } from "sonner";
 import { Button } from "#/components/ui/button";
+import {
+  DropdownMenu,
+  DropdownMenuCheckboxItem,
+  DropdownMenuContent,
+  DropdownMenuTrigger,
+} from "#/components/ui/dropdown-menu";
 import type { AuditLogFilters, AuditAction, ResourceType, AuditLog } from "#/types/audit-log";
 import { MOCK_ACTORS } from "#/hooks/useAuditLogs";
 
-const ACTION_OPTIONS: { value: AuditAction | "all"; label: string }[] = [
-  { value: "all", label: "Alle Aktionen" },
+const ACTION_OPTIONS: readonly { value: AuditAction; label: string }[] = [
   { value: "asset.created", label: "Asset erstellt" },
   { value: "asset.updated", label: "Asset aktualisiert" },
   { value: "asset.deleted", label: "Asset gelöscht" },
@@ -27,13 +32,17 @@ const ACTION_OPTIONS: { value: AuditAction | "all"; label: string }[] = [
   { value: "report.deleted", label: "Bericht gelöscht" },
 ];
 
-const RESOURCE_OPTIONS: { value: ResourceType | "all"; label: string }[] = [
-  { value: "all", label: "Alle Ressourcen" },
+const RESOURCE_OPTIONS: readonly { value: ResourceType; label: string }[] = [
   { value: "asset", label: "Asset" },
   { value: "onboarding", label: "Onboarding" },
   { value: "user", label: "Benutzer" },
   { value: "report", label: "Bericht" },
 ];
+
+const ACTOR_OPTIONS: readonly { value: string; label: string }[] = MOCK_ACTORS.map((a) => ({
+  value: a,
+  label: a,
+}));
 
 interface AuditLogToolbarProps {
   readonly filters: AuditLogFilters;
@@ -76,33 +85,75 @@ function downloadCsv(rows: readonly AuditLog[]) {
 }
 
 /**
- * Styled native select that visually matches shadcn/Base UI SelectTrigger.
+ * Multi-select filter using DropdownMenuCheckboxItem.
+ * Keeps menu open while toggling (onSelect preventDefault).
  */
-function FilterSelect({
+function MultiSelectFilter<T extends string>({
   label,
-  value,
-  onChange,
   options,
+  selected,
+  onChange,
+  placeholder,
 }: {
   readonly label: string;
-  readonly value: string;
-  readonly onChange: (value: string) => void;
-  readonly options: readonly { value: string; label: string }[];
+  readonly options: readonly { value: T; label: string }[];
+  readonly selected: readonly T[] | undefined;
+  readonly onChange: (selected: readonly T[]) => void;
+  readonly placeholder: string;
 }) {
+  const values = selected ?? [];
+
+  const toggle = useCallback(
+    (value: T) => {
+      onChange(
+        values.includes(value) ? values.filter((v) => v !== value) : [...values, value]
+      );
+    },
+    [values, onChange]
+  );
+
+  const display = useMemo(() => {
+    if (values.length === 0) return placeholder;
+    if (values.length === 1) {
+      const first = values[0];
+      if (first === undefined) return placeholder;
+      return options.find((o) => o.value === first)?.label ?? placeholder;
+    }
+    return `${label} (${values.length})`;
+  }, [values, options, label, placeholder]);
+
   return (
     <div className="space-y-1.5">
-      <label className="text-xs font-medium text-muted-foreground">{label}</label>
-      <select
-        value={value}
-        onChange={(e) => onChange(e.target.value)}
-        className="flex h-9 w-full min-w-[160px] cursor-pointer appearance-none rounded-md border border-input bg-transparent bg-[url('data:image/svg+xml;base64,PHN2ZyB4bWxucz0iaHR0cDovL3d3dy53My5vcmcvMjAwMC9zdmciIHdpZHRoPSIxNiIgaGVpZ2h0PSIxNiIgdmlld0JveD0iMCAwIDI0IDI0IiBmaWxsPSJub25lIiBzdHJva2U9ImN1cnJlbnRDb2xvciIgc3Ryb2tlLXdpZHRoPSIyIiBzdHJva2UtbGluZWNhcD0icm91bmQiIHN0cm9rZS1saW5lam9pbj0icm91bmQiPjxwYXRoIGQ9Im02IDkgNiA2IDYtNiIvPjwvc3ZnPg==')] bg-[length:16px] bg-[right_8px_center] bg-no-repeat px-3 pr-8 text-sm shadow-sm transition-colors focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring disabled:cursor-not-allowed disabled:opacity-50 dark:bg-input/30"
-      >
-        {options.map((opt) => (
-          <option key={opt.value} value={opt.value}>
-            {opt.label}
-          </option>
-        ))}
-      </select>
+      <span className="text-xs font-medium text-muted-foreground">{label}</span>
+      <DropdownMenu>
+        <DropdownMenuTrigger
+          render={
+            <Button
+              variant="outline"
+              size="sm"
+              className="w-full min-w-[180px] justify-between gap-2"
+            >
+              <span className="truncate">{display}</span>
+              <ChevronDown
+                className="h-4 w-4 shrink-0 text-muted-foreground"
+                aria-hidden="true"
+              />
+            </Button>
+          }
+        />
+        <DropdownMenuContent align="start" className="w-56">
+          {options.map((opt) => (
+            <DropdownMenuCheckboxItem
+              key={opt.value}
+              checked={values.includes(opt.value)}
+              onCheckedChange={() => toggle(opt.value)}
+              onSelect={(e) => e.preventDefault()}
+            >
+              {opt.label}
+            </DropdownMenuCheckboxItem>
+          ))}
+        </DropdownMenuContent>
+      </DropdownMenu>
     </div>
   );
 }
@@ -157,25 +208,28 @@ export function AuditLogToolbar({
             />
           </div>
 
-          <FilterSelect
+          <MultiSelectFilter
             label="Akteur"
-            value={filters.actor ?? "all"}
-            onChange={(value) => update("actor", value === "all" ? undefined : value)}
-            options={[{ value: "all", label: "Alle Akteure" }, ...MOCK_ACTORS.map((a) => ({ value: a, label: a }))]}
+            placeholder="Alle Akteure"
+            options={ACTOR_OPTIONS}
+            selected={filters.actors}
+            onChange={(v) => update("actors", v)}
           />
 
-          <FilterSelect
+          <MultiSelectFilter
             label="Aktion"
-            value={filters.action}
-            onChange={(value) => update("action", value as AuditAction | "all")}
+            placeholder="Alle Aktionen"
             options={ACTION_OPTIONS}
+            selected={filters.actions}
+            onChange={(v) => update("actions", v)}
           />
 
-          <FilterSelect
+          <MultiSelectFilter
             label="Ressource"
-            value={filters.resourceType}
-            onChange={(value) => update("resourceType", value as ResourceType | "all")}
+            placeholder="Alle Ressourcen"
             options={RESOURCE_OPTIONS}
+            selected={filters.resourceTypes}
+            onChange={(v) => update("resourceTypes", v)}
           />
         </div>
 

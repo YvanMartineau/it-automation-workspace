@@ -54,7 +54,6 @@ function pickFromArray<T>(arr: readonly T[], seed: number): T {
   const index = Math.floor(seededRandom(seed) * arr.length);
   const item = arr[index];
   if (item === undefined) {
-    // Arrays are compile-time non-empty constants; this is defensive.
     throw new Error(`pickFromArray: index ${index} out of bounds for array length ${arr.length}`);
   }
   return item;
@@ -75,10 +74,21 @@ function generateMockAuditLogs(
     const resourceType = pickFromArray(MOCK_RESOURCE_TYPES, seed + 1);
     const actor = pickFromArray(MOCK_ACTORS, seed + 2);
 
-    // Apply filters
-    if (filters.action !== "all" && action !== filters.action) continue;
-    if (filters.resourceType !== "all" && resourceType !== filters.resourceType) continue;
-    if (filters.actor && actor !== filters.actor) continue;
+    // Multi-select filters: OR within category, AND across categories.
+    // Empty array or undefined means "no filter" (show all).
+    if (filters.actions && filters.actions.length > 0 && !filters.actions.includes(action)) {
+      continue;
+    }
+    if (
+      filters.resourceTypes &&
+      filters.resourceTypes.length > 0 &&
+      !filters.resourceTypes.includes(resourceType)
+    ) {
+      continue;
+    }
+    if (filters.actors && filters.actors.length > 0 && !filters.actors.includes(actor)) {
+      continue;
+    }
 
     const timestamp = new Date(
       Date.now() - Math.floor(seededRandom(seed + 3) * 30 * 24 * 60 * 60 * 1000)
@@ -134,7 +144,6 @@ export function useAuditLogs(filters: AuditLogFilters, cursor: string | null) {
   return useQuery<PaginatedAuditLogList, Error>({
     queryKey: ["audit-logs", filters, cursor],
     queryFn: async () => {
-      // Simulate network latency
       await new Promise((resolve) => setTimeout(resolve, 400));
       return generateMockAuditLogs(cursor, 25, filters);
     },
