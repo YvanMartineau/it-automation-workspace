@@ -1,12 +1,13 @@
 /**
  * TanStack Table v8 implementation for audit logs.
- * Supports row expansion for diff view and cursor pagination.
+ * Supports row expansion for diff view.
  * @module components/data-display/AuditLogTable
  */
 
-import { useMemo } from "react";
+import { useMemo, useState } from "react";
 import {
   type ColumnDef,
+  type ExpandedState,
   flexRender,
   getCoreRowModel,
   getExpandedRowModel,
@@ -80,6 +81,8 @@ interface AuditLogTableProps {
 }
 
 export function AuditLogTable({ data, isLoading }: AuditLogTableProps) {
+  const [expanded, setExpanded] = useState<ExpandedState>({});
+
   const columns = useMemo<ColumnDef<AuditLog>[]>(
     () => [
       {
@@ -183,11 +186,14 @@ export function AuditLogTable({ data, isLoading }: AuditLogTableProps) {
   );
 
   const table = useReactTable({
-    data: [...data],
+    data: [...data], // ← FIX: shallow copy to satisfy TanStack Table's mutable requirement
     columns,
+    state: { expanded },
+    onExpandedChange: setExpanded,
     getCoreRowModel: getCoreRowModel(),
     getExpandedRowModel: getExpandedRowModel(),
     getRowCanExpand: (row) => !!row.original.diff,
+    getRowId: (row) => row.id,
   });
 
   if (isLoading) {
