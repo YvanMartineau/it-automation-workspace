@@ -1,6 +1,6 @@
 /**
  * Filter bar and export controls for the audit log viewer.
- * Multi-select dropdowns using DropdownMenu (Base UI).
+ * Single-select native dropdowns populated from backend.
  * @module components/data-display/AuditLogToolbar
  */
 
@@ -8,41 +8,30 @@ import { useCallback, useMemo } from "react";
 import { ChevronDown, Download, RotateCcw } from "lucide-react";
 import { toast } from "sonner";
 import { Button } from "#/components/ui/button";
-import {
-  DropdownMenu,
-  DropdownMenuCheckboxItem,
-  DropdownMenuContent,
-  DropdownMenuTrigger,
-} from "#/components/ui/dropdown-menu";
-import type { AuditLogFilters, AuditAction, ResourceType, AuditLog } from "#/types/audit-log";
-import { MOCK_ACTORS } from "#/hooks/useAuditLogs";
+import { useAuditLogFilterOptions } from "#/hooks/useAuditLogFilterOption";
+import type { AuditLogFilters, AuditLog } from "#/types/audit-log";
 
-const ACTION_OPTIONS: readonly { value: AuditAction; label: string }[] = [
-  { value: "asset.created", label: "Asset erstellt" },
-  { value: "asset.updated", label: "Asset aktualisiert" },
-  { value: "asset.deleted", label: "Asset gelöscht" },
-  { value: "asset.scanned", label: "Netzwerk-Scan" },
-  { value: "onboarding.created", label: "Onboarding erstellt" },
-  { value: "onboarding.updated", label: "Onboarding aktualisiert" },
-  { value: "onboarding.retried", label: "Onboarding wiederholt" },
-  { value: "user.login", label: "Anmeldung" },
-  { value: "user.logout", label: "Abmeldung" },
-  { value: "user.permission_changed", label: "Berechtigung geändert" },
-  { value: "report.generated", label: "Bericht erstellt" },
-  { value: "report.deleted", label: "Bericht gelöscht" },
-];
+const ACTION_LABELS: Record<string, string> = {
+  "asset.created": "Asset erstellt",
+  "asset.updated": "Asset aktualisiert",
+  "asset.deleted": "Asset gelöscht",
+  "asset.scanned": "Netzwerk-Scan",
+  "onboarding.created": "Onboarding erstellt",
+  "onboarding.updated": "Onboarding aktualisiert",
+  "onboarding.retried": "Onboarding wiederholt",
+  "user.login": "Anmeldung",
+  "user.logout": "Abmeldung",
+  "user.permission_changed": "Berechtigung geändert",
+  "report.generated": "Bericht erstellt",
+  "report.deleted": "Bericht gelöscht",
+};
 
-const RESOURCE_OPTIONS: readonly { value: ResourceType; label: string }[] = [
-  { value: "asset", label: "Asset" },
-  { value: "onboarding", label: "Onboarding" },
-  { value: "user", label: "Benutzer" },
-  { value: "report", label: "Bericht" },
-];
-
-const ACTOR_OPTIONS: readonly { value: string; label: string }[] = MOCK_ACTORS.map((a) => ({
-  value: a,
-  label: a,
-}));
+const RESOURCE_LABELS: Record<string, string> = {
+  asset: "Asset",
+  onboarding: "Onboarding",
+  user: "Benutzer",
+  report: "Bericht",
+};
 
 interface AuditLogToolbarProps {
   readonly filters: AuditLogFilters;
@@ -83,63 +72,47 @@ function downloadCsv(rows: readonly AuditLog[]) {
   toast.success("CSV-Export heruntergeladen");
 }
 
-function MultiSelectFilter<T extends string>({
+/**
+ * Styled native <select> with an inline Lucide icon.
+ * No base64 data: URI — CSP-safe.
+ */
+function FilterSelect({
   label,
-  options,
-  selected,
+  value,
   onChange,
+  options,
   placeholder,
+  isLoading,
 }: {
   readonly label: string;
-  readonly options: readonly { value: T; label: string }[];
-  readonly selected: readonly T[] | undefined;
-  readonly onChange: (selected: readonly T[]) => void;
+  readonly value: string | undefined;
+  readonly onChange: (value: string | undefined) => void;
+  readonly options: readonly { value: string; label: string }[];
   readonly placeholder: string;
+  readonly isLoading: boolean;
 }) {
-  const values = selected ?? [];
-
-  const toggle = useCallback(
-    (value: T) => {
-      onChange(values.includes(value) ? values.filter((v) => v !== value) : [...values, value]);
-    },
-    [values, onChange]
-  );
-
-  const display = useMemo(() => {
-    if (values.length === 0) return placeholder;
-    if (values.length === 1) {
-      const first = values[0];
-      if (first === undefined) return placeholder;
-      return options.find((o) => o.value === first)?.label ?? placeholder;
-    }
-    return `${label} (${values.length})`;
-  }, [values, options, label, placeholder]);
-
   return (
     <div className="space-y-1.5">
       <span className="text-xs font-medium text-muted-foreground">{label}</span>
-      <DropdownMenu>
-        <DropdownMenuTrigger
-          render={
-            <Button variant="outline" size="sm" className="w-full min-w-[180px] justify-between gap-2">
-              <span className="truncate">{display}</span>
-              <ChevronDown className="h-4 w-4 shrink-0 text-muted-foreground" aria-hidden="true" />
-            </Button>
-          }
-        />
-        <DropdownMenuContent align="start" className="w-56">
+      <div className="relative">
+        <select
+          value={value ?? ""}
+          onChange={(e) => onChange(e.target.value || undefined)}
+          disabled={isLoading}
+          className="flex h-9 w-full min-w-[180px] cursor-pointer appearance-none rounded-md border border-input bg-transparent px-3 pr-8 text-sm shadow-sm transition-colors focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring disabled:cursor-not-allowed disabled:opacity-50 dark:bg-input/30"
+        >
+          <option value="">{placeholder}</option>
           {options.map((opt) => (
-            <DropdownMenuCheckboxItem
-              key={opt.value}
-              checked={values.includes(opt.value)}
-              onCheckedChange={() => toggle(opt.value)}
-              onSelect={(e) => e.preventDefault()}
-            >
+            <option key={opt.value} value={opt.value}>
               {opt.label}
-            </DropdownMenuCheckboxItem>
+            </option>
           ))}
-        </DropdownMenuContent>
-      </DropdownMenu>
+        </select>
+        <ChevronDown
+          className="pointer-events-none absolute right-2.5 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground"
+          aria-hidden="true"
+        />
+      </div>
     </div>
   );
 }
@@ -150,11 +123,36 @@ export function AuditLogToolbar({
   onReset,
   data,
 }: AuditLogToolbarProps) {
+  const { data: filterOptions, isLoading: filtersLoading } = useAuditLogFilterOptions();
+
   const update = useCallback(
     <K extends keyof AuditLogFilters>(key: K, value: AuditLogFilters[K]) => {
       onFiltersChange({ ...filters, [key]: value });
     },
     [filters, onFiltersChange]
+  );
+
+  const actorOptions = useMemo(
+    () => (filterOptions?.actors ?? []).map((a) => ({ value: a, label: a })),
+    [filterOptions?.actors]
+  );
+
+  const actionOptions = useMemo(
+    () =>
+      (filterOptions?.actions ?? []).map((a) => ({
+        value: a,
+        label: ACTION_LABELS[a] ?? a,
+      })),
+    [filterOptions?.actions]
+  );
+
+  const resourceOptions = useMemo(
+    () =>
+      (filterOptions?.targetTypes ?? []).map((t) => ({
+        value: t,
+        label: RESOURCE_LABELS[t] ?? t,
+      })),
+    [filterOptions?.targetTypes]
   );
 
   return (
@@ -187,28 +185,31 @@ export function AuditLogToolbar({
             />
           </div>
 
-          <MultiSelectFilter
+          <FilterSelect
             label="Akteur"
             placeholder="Alle Akteure"
-            options={ACTOR_OPTIONS}
-            selected={filters.actors}
-            onChange={(v) => update("actors", v)}
+            value={filters.actor}
+            onChange={(v) => update("actor", v)}
+            options={actorOptions}
+            isLoading={filtersLoading}
           />
 
-          <MultiSelectFilter
+          <FilterSelect
             label="Aktion"
             placeholder="Alle Aktionen"
-            options={ACTION_OPTIONS}
-            selected={filters.actions}
-            onChange={(v) => update("actions", v)}
+            value={filters.action}
+            onChange={(v) => update("action", v)}
+            options={actionOptions}
+            isLoading={filtersLoading}
           />
 
-          <MultiSelectFilter
+          <FilterSelect
             label="Ressource"
             placeholder="Alle Ressourcen"
-            options={RESOURCE_OPTIONS}
-            selected={filters.resourceTypes}
-            onChange={(v) => update("resourceTypes", v)}
+            value={filters.resourceType}
+            onChange={(v) => update("resourceType", v)}
+            options={resourceOptions}
+            isLoading={filtersLoading}
           />
         </div>
 

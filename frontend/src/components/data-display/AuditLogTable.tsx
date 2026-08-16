@@ -25,7 +25,7 @@ import { Badge } from "#/components/ui/badge";
 import { ChevronDown, ChevronRight, Lock, Shield } from "lucide-react";
 import { AuditLogDiff } from "./AuditLogDiff";
 import { TableSkeleton } from "#/components/feedback/TableSkeleton";
-import type { AuditLog} from "#/types/audit-log";
+import type { AuditLog } from "#/types/audit-log";
 
 function formatTimestamp(iso: string): string {
   const d = new Date(iso);

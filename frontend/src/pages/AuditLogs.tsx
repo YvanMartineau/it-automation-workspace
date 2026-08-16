@@ -1,6 +1,5 @@
 /**
  * Audit Log Viewer Page
- * Immutable, append-only audit trail with offset pagination.
  * @module pages/AuditLogs
  */
 
