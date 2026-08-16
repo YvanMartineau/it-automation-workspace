@@ -1,6 +1,6 @@
 /**
  * Audit Log domain types
- * Mirrors the backend Pydantic schema for append-only audit records.
+ * Mirrors the backend Pydantic schema (AuditLogRead) for append-only audit records.
  * @module types/audit-log
  */
 
@@ -20,40 +20,34 @@ export type AuditAction =
 
 export type ResourceType = "asset" | "onboarding" | "user" | "report";
 
-export interface AuditLogDiffEntry {
-  readonly old: unknown;
-  readonly new: unknown;
-}
-
 export interface AuditLog {
   readonly id: string;
   readonly timestamp: string; // ISO 8601
   readonly actor: string;
-  readonly action: AuditAction;
-  readonly resourceType: ResourceType;
-  readonly resourceId: string;
-  readonly diff?: Readonly<Record<string, AuditLogDiffEntry>>;
-  readonly ipAddress?: string;
-  readonly userAgent?: string;
+  readonly action: string;
+  readonly targetType: string | null; // backend: target_type
+  readonly targetId: string | null;   // backend: target_id
+  readonly payload: unknown;          // backend: payload (JSONB)
 }
 
 /**
- * Multi-select filters: empty array or undefined means "all".
+ * Multi-select filters: UI allows multiple, but API sends first item only (Option B).
  */
 export interface AuditLogFilters {
   readonly startDate?: string; // YYYY-MM-DD
-  readonly endDate?: string; // YYYY-MM-DD
+  readonly endDate?: string;   // YYYY-MM-DD
   readonly actors?: readonly string[];
   readonly actions?: readonly AuditAction[];
   readonly resourceTypes?: readonly ResourceType[];
 }
 
-export interface CursorPaginationMeta {
-  readonly nextCursor: string | null;
+export interface OffsetPaginationMeta {
+  readonly offset: number;
+  readonly limit: number;
   readonly hasMore: boolean;
 }
 
 export interface PaginatedAuditLogList {
   readonly data: readonly AuditLog[];
-  readonly meta: CursorPaginationMeta;
+  readonly meta: OffsetPaginationMeta;
 }

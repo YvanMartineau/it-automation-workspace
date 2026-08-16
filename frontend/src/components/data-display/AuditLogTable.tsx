@@ -1,7 +1,5 @@
 /**
  * TanStack Table v8 implementation for audit logs.
- * Supports row expansion for diff view.
- * Performance: memoized data reference, React.memo wrapper, stable row IDs.
  * @module components/data-display/AuditLogTable
  */
 
@@ -27,7 +25,7 @@ import { Badge } from "#/components/ui/badge";
 import { ChevronDown, ChevronRight, Lock, Shield } from "lucide-react";
 import { AuditLogDiff } from "./AuditLogDiff";
 import { TableSkeleton } from "#/components/feedback/TableSkeleton";
-import type { AuditLog, AuditAction, ResourceType } from "#/types/audit-log";
+import type { AuditLog} from "#/types/audit-log";
 
 function formatTimestamp(iso: string): string {
   const d = new Date(iso);
@@ -41,15 +39,15 @@ function formatTimestamp(iso: string): string {
   }).format(d);
 }
 
-function getActionColor(action: AuditAction): string {
+function getActionColor(action: string): string {
   if (action.endsWith(".created") || action.endsWith(".login")) return "bg-success/10 text-success";
   if (action.endsWith(".deleted") || action.endsWith(".logout")) return "bg-destructive/10 text-destructive";
   if (action.endsWith(".updated") || action.endsWith(".retried")) return "bg-warning/10 text-warning";
   return "bg-info/10 text-info";
 }
 
-function getActionLabel(action: AuditAction): string {
-  const map: Record<AuditAction, string> = {
+function getActionLabel(action: string): string {
+  const map: Record<string, string> = {
     "asset.created": "Asset erstellt",
     "asset.updated": "Asset aktualisiert",
     "asset.deleted": "Asset gelöscht",
@@ -66,14 +64,15 @@ function getActionLabel(action: AuditAction): string {
   return map[action] ?? action;
 }
 
-function getResourceTypeLabel(type: ResourceType): string {
-  const map: Record<ResourceType, string> = {
+function getResourceTypeLabel(type: string | null): string {
+  if (!type) return "—";
+  const map: Record<string, string> = {
     asset: "Asset",
     onboarding: "Onboarding",
     user: "Benutzer",
     report: "Bericht",
   };
-  return map[type];
+  return map[type] ?? type;
 }
 
 interface AuditLogTableProps {
@@ -86,7 +85,7 @@ const COLUMNS: ColumnDef<AuditLog>[] = [
     id: "expander",
     header: () => null,
     cell: ({ row }) =>
-      row.original.diff ? (
+      row.original.payload ? (
         <Button
           variant="ghost"
           size="sm"
@@ -109,11 +108,7 @@ const COLUMNS: ColumnDef<AuditLog>[] = [
     header: "Zeitstempel",
     cell: ({ getValue }) => {
       const value = getValue() as string;
-      return (
-        <span className="tabular-nums text-muted-foreground">
-          {formatTimestamp(value)}
-        </span>
-      );
+      return <span className="tabular-nums text-muted-foreground">{formatTimestamp(value)}</span>;
     },
     size: 180,
   },
@@ -130,7 +125,7 @@ const COLUMNS: ColumnDef<AuditLog>[] = [
     accessorKey: "action",
     header: "Aktion",
     cell: ({ getValue }) => {
-      const action = getValue() as AuditAction;
+      const action = getValue() as string;
       return (
         <Badge variant="secondary" className={`${getActionColor(action)} border-0`}>
           {getActionLabel(action)}
@@ -140,50 +135,32 @@ const COLUMNS: ColumnDef<AuditLog>[] = [
     size: 160,
   },
   {
-    accessorKey: "resourceType",
+    accessorKey: "targetType",
     header: "Ressource",
     cell: ({ getValue }) => {
-      const type = getValue() as ResourceType;
-      return (
-        <span className="text-muted-foreground">
-          {getResourceTypeLabel(type)}
-        </span>
-      );
+      const value = getValue() as string | null;
+      return <span className="text-muted-foreground">{getResourceTypeLabel(value)}</span>;
     },
     size: 120,
   },
   {
-    accessorKey: "resourceId",
+    accessorKey: "targetId",
     header: "Ressourcen-ID",
     cell: ({ getValue }) => {
-      const value = getValue() as string;
+      const value = getValue() as string | null;
       return (
         <code className="rounded bg-muted px-1.5 py-0.5 text-xs font-mono">
-          {value}
+          {value ?? "—"}
         </code>
       );
     },
     size: 140,
-  },
-  {
-    accessorKey: "ipAddress",
-    header: "IP-Adresse",
-    cell: ({ getValue }) => {
-      const value = getValue() as string | undefined;
-      return (
-        <span className="tabular-nums text-muted-foreground text-xs">
-          {value ?? "—"}
-        </span>
-      );
-    },
-    size: 130,
   },
 ];
 
 function AuditLogTableInner({ data, isLoading }: AuditLogTableProps) {
   const [expanded, setExpanded] = useState<ExpandedState>({});
 
-  // Stable mutable copy: only recalculates when the actual data contents change
   const tableData = useMemo(() => [...data], [data]);
 
   const table = useReactTable({
@@ -193,7 +170,7 @@ function AuditLogTableInner({ data, isLoading }: AuditLogTableProps) {
     onExpandedChange: setExpanded,
     getCoreRowModel: getCoreRowModel(),
     getExpandedRowModel: getExpandedRowModel(),
-    getRowCanExpand: (row) => !!row.original.diff,
+    getRowCanExpand: (row) => row.original.payload !== null,
     getRowId: (row) => row.id,
   });
 
@@ -253,11 +230,11 @@ function AuditLogTableInner({ data, isLoading }: AuditLogTableProps) {
                   </TableCell>
                 ))}
               </TableRow>
-              {row.getIsExpanded() && row.original.diff && (
+              {row.getIsExpanded() && row.original.payload !== null && (
                 <TableRow className="hover:bg-transparent">
                   <TableCell colSpan={COLUMNS.length} className="p-0">
                     <div className="px-4 py-3">
-                      <AuditLogDiff diff={row.original.diff} />
+                      <AuditLogDiff payload={row.original.payload} />
                     </div>
                   </TableCell>
                 </TableRow>
