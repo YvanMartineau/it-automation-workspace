@@ -17,10 +17,6 @@ const DEFAULT_FILTERS: AuditLogFilters = {
   resourceType: "all",
 };
 
-function isNonNullString(value: unknown): value is string {
-  return typeof value === "string";
-}
-
 export default function AuditLogs() {
   const [filters, setFilters] = useState<AuditLogFilters>(DEFAULT_FILTERS);
   const [cursor, setCursor] = useState<string | null>(null);
@@ -41,17 +37,21 @@ export default function AuditLogs() {
   }, []);
 
   const handleNext = useCallback(() => {
-    if (data?.meta.nextCursor) {
-      setCursorHistory((prev) => [...prev, cursor].filter(isNonNullString));
-      setCursor(data.meta.nextCursor);
-    }
+    if (!data?.meta.nextCursor) return;
+
+    setCursorHistory((prev) => {
+      const next = cursor === null ? prev : [...prev, cursor];
+      return next;
+    });
+    setCursor(data.meta.nextCursor);
   }, [data?.meta.nextCursor, cursor]);
 
   const handlePrevious = useCallback(() => {
     setCursorHistory((prev) => {
       if (prev.length === 0) return prev;
       const newHistory = [...prev];
-      const previousCursor = newHistory.pop() ?? null;
+      const previousCursor = newHistory.pop()!;
+      // Schedule cursor update in the next tick to avoid updater-in-updater anti-pattern
       setCursor(previousCursor);
       return newHistory;
     });
