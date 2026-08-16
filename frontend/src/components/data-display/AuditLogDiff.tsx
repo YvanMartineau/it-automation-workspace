@@ -1,9 +1,10 @@
 /**
  * Expandable diff viewer for audit log changes.
- * Shows old → new values with semantic color coding.
+ * Memoized to prevent re-render when parent table updates.
  * @module components/data-display/AuditLogDiff
  */
 
+import React from "react";
 import { Minus, Plus, ArrowRight } from "lucide-react";
 import type { AuditLogDiffEntry } from "#/types/audit-log";
 
@@ -11,7 +12,7 @@ interface AuditLogDiffProps {
   readonly diff: Readonly<Record<string, AuditLogDiffEntry>>;
 }
 
-export function AuditLogDiff({ diff }: AuditLogDiffProps) {
+function AuditLogDiffInner({ diff }: AuditLogDiffProps) {
   const entries = Object.entries(diff);
 
   return (
@@ -49,3 +50,5 @@ export function AuditLogDiff({ diff }: AuditLogDiffProps) {
     </div>
   );
 }
+
+export const AuditLogDiff = React.memo(AuditLogDiffInner);
