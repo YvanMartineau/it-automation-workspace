@@ -9,22 +9,24 @@ from fastapi.middleware.cors import CORSMiddleware
 from slowapi import _rate_limit_exceeded_handler
 from slowapi.errors import RateLimitExceeded
 from core.exceptions import setup_exception_handlers
+from core.logging_config import setup_logging
 from settings import get_settings
 from security.rate_limiter import limiter
-from services.scheduler import start_scheduler, stop_scheduler
+# from services.scheduler import start_scheduler, stop_scheduler
 # from routers import auth, devices, scan, onboard, audit, reports
 from routers import auth, devices, audit, scan
 
 settings = get_settings()
-
 @asynccontextmanager
 
 async def lifespan(app: FastAPI):
-    start_scheduler()
+    # start_scheduler()
     yield
-    stop_scheduler()
+    # stop_scheduler()
 
 def create_app() -> FastAPI:
+    setup_logging()
+
     app = FastAPI(
         title="IT Automation Platform",
         description="Automated device management, onboarding, and reporting.",
@@ -35,7 +37,6 @@ def create_app() -> FastAPI:
     )
 
     app.state.limiter = limiter
-
     setup_exception_handlers(app)
     app.add_exception_handler(RateLimitExceeded, _rate_limit_exceeded_handler)
     app.add_middleware(
