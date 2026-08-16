@@ -37,10 +37,28 @@ class DeviceRead(BaseModel):
     cpu_percent: float | None
     memory_percent: float | None
     os_info: str | None
-    # Both scan-derived — see services/scanner.py and the column comments
-    # on models/device.py for exactly how/when these get populated.
     latency_ms: float | None
     open_ports: list[dict] | None
     last_seen: datetime | None
     created_at: datetime
     updated_at: datetime | None
+
+
+class PaginationMeta(BaseModel):
+    """
+    Deliberately camelCase field NAMES (not aliases) — unlike DeviceRead
+    above, which mirrors the ORM's snake_case exactly since it'll
+    eventually be superseded by openapi-typescript codegen. This envelope
+    is hand-written and only ever consumed by the frontend directly, so
+    matching its expected shape 1:1 avoids an alias layer for something
+    that will never come from codegen anyway.
+    """
+    page: int
+    pageSize: int
+    totalPages: int
+    totalItems: int
+
+
+class PaginatedDeviceList(BaseModel):
+    data: list[DeviceRead]
+    meta: PaginationMeta

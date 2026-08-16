@@ -36,7 +36,7 @@ import { useScanStream } from "#/hooks/useScanStream";
 import { useAuthStore } from "#/hooks/useAuth";
 import { scanRequestSchema } from "#/types/scan";
 import type { Table as TanStackTable } from "@tanstack/react-table";
-import type { Asset, AssetFilters, AssetStatus, OSType, AssetHealth } from "#/types/asset";
+import type { Asset, AssetFilters, DeviceStatus, AssetHealth } from "#/types/asset";
 
 // Falls back here if nothing else supplies a default. Hardcoded per team
 // decision rather than read from a VITE_* env var for this pass.
@@ -52,28 +52,37 @@ interface AssetToolbarProps {
   onScanComplete?: (foundCount: number) => void;
 }
 
-const STATUS_OPTIONS: { value: AssetStatus | "all"; label: string }[] = [
+// "sleeping" removed, "unknown" added — matches the real DeviceStatus
+// nmap can actually report (models/device.py's DeviceStatus enum).
+const STATUS_OPTIONS: { value: DeviceStatus | "all"; label: string }[] = [
   { value: "all", label: "Alle Status" },
   { value: "online", label: "Online" },
   { value: "offline", label: "Offline" },
-  { value: "sleeping", label: "Schlafend" },
+  { value: "unknown", label: "Unbekannt" },
 ];
 
-const OS_OPTIONS: { value: OSType | "all"; label: string }[] = [
+// No longer a fixed enum — os_info is nmap's free-text OS-match string
+// (e.g. "Linux 5.X (88% confidence)"), matched server-side via ILIKE
+// substring (see device_service.py's list_devices_paginated). "Other" is
+// dropped: there's no substring that meaningfully matches "anything else"
+// against free text.
+const OS_OPTIONS: { value: string; label: string }[] = [
   { value: "all", label: "Alle OS" },
   { value: "Windows", label: "Windows" },
   { value: "Linux", label: "Linux" },
-  { value: "macOS", label: "macOS" },
+  { value: "Mac", label: "macOS" },
   { value: "iOS", label: "iOS" },
   { value: "Android", label: "Android" },
-  { value: "Other", label: "Sonstige" },
 ];
 
+// Labels no longer imply a numeric score — there isn't one. See
+// lib/assetHealth.ts for what each state actually means (status +,
+// for the scan host only, cpu/memory thresholds).
 const HEALTH_OPTIONS: { value: AssetHealth | "all"; label: string }[] = [
   { value: "all", label: "Alle Health" },
-  { value: "healthy", label: "Gesund (≥80%)" },
-  { value: "warning", label: "Warnung (50-79%)" },
-  { value: "critical", label: "Kritisch (<50%)" },
+  { value: "healthy", label: "Gesund" },
+  { value: "warning", label: "Langsam" },
+  { value: "critical", label: "Kritisch" },
   { value: "unknown", label: "Unbekannt" },
 ];
 
@@ -97,12 +106,9 @@ export function AssetToolbar({
   const role = useAuthStore((s) => s.user?.role);
   const isAdmin = typeof role === "string" && role.toLowerCase() === "admin";
 
-  // Dev-only diagnostic. If the scan button is missing, check the browser
-  // console for this line — it tells you exactly what `role` the store
-  // actually holds. Most likely cause if it prints `undefined`: `user` is
-  // null because only `isAuthenticated` survives a page reload (see
-  // useAuth.ts's partialize) and nothing has called /auth/refresh yet to
-  // repopulate it. Remove this once that's confirmed fixed.
+  // Dev-only diagnostic — safe to remove once you've confirmed the
+  // AuthBootstrapGate flow from earlier in this thread is deployed and
+  // working, since that's what fixed `role` coming back undefined.
   if (import.meta.env.DEV && !isAdmin) {
     // eslint-disable-next-line no-console
     console.debug("[AssetToolbar] scan button hidden — current role:", role);
@@ -337,7 +343,7 @@ export function AssetToolbar({
         <div className="flex flex-wrap gap-4 rounded-lg border bg-card p-4">
           <Select
             value={filters.status}
-            onValueChange={(value) => updateFilter("status", value as AssetStatus | "all")}
+            onValueChange={(value) => updateFilter("status", value as DeviceStatus | "all")}
           >
             <SelectTrigger className="w-[180px]">
               <SelectValue placeholder="Status" />
@@ -353,7 +359,7 @@ export function AssetToolbar({
 
           <Select
             value={filters.os}
-            onValueChange={(value) => updateFilter("os", value as OSType | "all")}
+            onValueChange={(value) => updateFilter("os", value ?? "all")}
           >
             <SelectTrigger className="w-[180px]">
               <SelectValue placeholder="Betriebssystem" />

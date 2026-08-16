@@ -28,11 +28,16 @@ interface AssetRowActionsProps {
 export function AssetRowActions({ asset, onDelete }: AssetRowActionsProps) {
   const [showDeleteDialog, setShowDeleteDialog] = useState(false);
 
+  // hostname is nullable on Device (nmap doesn't always resolve one) —
+  // fall back to ip_address so this never renders "undefined" or an
+  // empty string in the toast/confirmation copy.
+  const displayName = asset.hostname ?? asset.ip_address;
+
   const handleDelete = () => {
     onDelete(asset.id);
     setShowDeleteDialog(false);
     toast.success("Asset gelöscht", {
-      description: `${asset.hostname} wurde erfolgreich entfernt.`,
+      description: `${displayName} wurde erfolgreich entfernt.`,
     });
   };
 
@@ -40,11 +45,11 @@ export function AssetRowActions({ asset, onDelete }: AssetRowActionsProps) {
     <>
       <DropdownMenu>
         <DropdownMenuTrigger
-        render={
+          render={
             <Button variant="ghost" size="icon" className="h-8 w-8" aria-label="Aktionen öffnen" />
-        }
+          }
         >
-        <MoreHorizontal className="h-4 w-4" aria-hidden="true" />
+          <MoreHorizontal className="h-4 w-4" aria-hidden="true" />
         </DropdownMenuTrigger>
         <DropdownMenuContent align="end" className="w-[160px]">
           <DropdownMenuItem onSelect={(e) => e.preventDefault()} className="gap-2">
@@ -74,7 +79,7 @@ export function AssetRowActions({ asset, onDelete }: AssetRowActionsProps) {
           <DialogHeader>
             <DialogTitle>Asset löschen</DialogTitle>
             <DialogDescription>
-              Sind Sie sicher, dass Sie <strong>{asset.hostname}</strong> löschen möchten?
+              Sind Sie sicher, dass Sie <strong>{displayName}</strong> löschen möchten?
               Diese Aktion kann nicht rückgängig gemacht werden.
             </DialogDescription>
           </DialogHeader>
