@@ -30,22 +30,22 @@ services:
       command: uvicorn main:app --host 0.0.0.0 --port 8000 --reload
 
 
-#  n8n:
-#    image: n8nio/n8n:latest
-#    ports:
-#      - "5678:5678"
-#    volumes:
-#      - n8n_data:/home/node/.n8n
-#      - ./n8n-workflows:/home/node/.n8n/workflows:ro
-#    environment:
-#      - N8N_BASIC_AUTH_ACTIVE=true
-#      - N8N_BASIC_AUTH_USER=admin
-#      - N8N_BASIC_AUTH_PASSWORD=${N8N_PASSWORD:-changeme}
-#      - N8N_HOST=localhost
-#      - N8N_PORT=5678
-#      - WEBHOOK_URL=http://localhost:5678
-#    restart: unless-stopped
-#    mem_limit: 512m   # CRITICAL — without this n8n can OOM-kill FastAPI
+  n8n:
+    image: n8nio/n8n:latest
+    ports:
+      - "5678:5678"
+    volumes:
+      - n8n_data:/home/node/.n8n
+      - ./n8n-workflows:/home/node/.n8n/workflows:ro
+    environment:
+      - N8N_BASIC_AUTH_ACTIVE=true
+      - N8N_BASIC_AUTH_USER=admin
+      - N8N_BASIC_AUTH_PASSWORD=${N8N_PASSWORD:-DemoAdmin!2026}
+      - N8N_HOST=localhost
+      - N8N_PORT=5678
+      - WEBHOOK_URL=http://localhost:5678
+    restart: unless-stopped
+    mem_limit: 2g   # CRITICAL — without this n8n can OOM-kill FastAPI
 
   postgres_local:
     image: postgres:16-alpine
@@ -85,5 +85,5 @@ services:
     profiles: ["tools"]   # only starts with: docker compose --profile tools up
 
 volumes:
-#  n8n_data:
+  n8n_data:
   postgres_dev_data:

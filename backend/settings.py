@@ -5,6 +5,7 @@ All secrets come from environment — never hardcoded.
 """
 from pathlib import Path
 from functools import lru_cache
+from typing import Literal
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
 ENV_FILE_PATH = Path(__file__).resolve().parent.parent / ".env"
@@ -23,15 +24,22 @@ class Settings(BaseSettings):
     ACCESS_TOKEN_EXPIRE_MINUTES: int = 15
     REFRESH_TOKEN_EXPIRE_DAYS: int = 7
 
+    # Identity provisioning — provider-agnostic onboarding
+    # "local": store onboarded users in our own DB (current, no Entra ID access yet)
+    # "entra_id": provision via Microsoft Graph (future — requires GRAPH_* vars below)
+    IDENTITY_PROVIDER: Literal["local", "entra_id"] = "local"
+
     # Microsoft Graph
     #GRAPH_TENANT_ID: str
     #GRAPH_CLIENT_ID: str
     #GRAPH_CLIENT_SECRET: str
     #GRAPH_DEFAULT_GROUP_ID: str = ""
 
-    # n8n
-    #N8N_ONBOARDING_WEBHOOK_URL: str
-    #N8N_WEBHOOK_TIMEOUT_SECONDS: int = 5
+    # n8n — optional by design. ADR-007: n8n is fire-and-continue and non-critical-path
+    # at request time; leaving this unset must not crash startup or block onboarding.
+    N8N_ONBOARDING_WEBHOOK_URL: str = ""
+    N8N_WEBHOOK_TIMEOUT_SECONDS: int = 5
+
 
     # Gmail OAuth2
     #GMAIL_OAUTH_CLIENT_ID: str
