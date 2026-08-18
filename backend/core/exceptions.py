@@ -121,3 +121,26 @@ def setup_exception_handlers(app: FastAPI) -> None:
                 }
             },
         )
+
+"""
+Domain-level exceptions raised by service functions. Deliberately NOT
+HTTPException subclasses — services shouldn't know about HTTP. Routers
+catch these and translate to a status code. Same pattern as TokenError
+in security/jwt_handler.py.
+"""
+
+
+class DomainError(Exception):
+    """Base class for all domain-level errors."""
+
+
+class ConflictError(DomainError):
+    """A uniqueness constraint would be violated (e.g. duplicate email)."""
+
+
+class NotFoundError(DomainError):
+    """A requested resource does not exist."""
+
+
+class ExternalServiceError(DomainError):
+    """A call to an external system failed unrecoverably."""

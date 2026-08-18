@@ -12,7 +12,7 @@ from db.engine import get_db
 from models.user import User
 from schemas.onboard import OnboardRequest, OnboardResponse
 from security.jwt_handler import get_admin_user
-from services.audit_log_service import write_audit_log
+from middleware.audit_middleware import write_audit_log
 from services.n8n_client import trigger_onboarding_workflow
 from services.password_policy import generate_secure_password
 from services.provisioning.base import UserProvisioningService
