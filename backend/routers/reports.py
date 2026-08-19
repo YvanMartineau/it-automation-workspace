@@ -9,7 +9,7 @@ from models.report_log import ReportLog
 from schemas.report import ReportTriggerRequest, ReportTriggerResponse, ReportRead
 from security.jwt_handler import get_current_user, get_admin_user
 from services.report_service import generate_and_send_report_task
-from services.audit_log_service import write_audit_log
+from middleware.audit_middleware import write_audit_log
 
 router = APIRouter(prefix="/reports", tags=["Reports"])
 

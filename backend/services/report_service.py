@@ -2,14 +2,14 @@ import logging
 import uuid
 from typing import Callable
 from sqlalchemy.ext.asyncio import AsyncSession
-from sqlalchemy import select, func, col
+from sqlalchemy import select, func
 
 from models.report_log import ReportLog, ReportStatus, ReportType
 from models.device import Device
 from models.audit_log import AuditLog
 from services.pdf_service import generate_report_pdf
 from services.email_service import send_email_with_attachment
-from services.audit_log_service import write_audit_log
+from middleware.audit_middleware import write_audit_log
 
 logger = logging.getLogger(__name__)
 

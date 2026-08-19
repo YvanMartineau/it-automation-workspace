@@ -10,10 +10,9 @@ services:
         context: ../backend
         dockerfile: Dockerfile
       env_file: ../.env
-# ports What removed Because we want Docker to access the local network on which it is running (needed for nmap to work right)
-#    ports:
-#      - "127.0.0.1:8000:8000"
-      network_mode: "host"     # shares the (now-mirrored) host network instead of the isolated bridge
+     # ADD THIS TO MAP THE PORT TO YOUR WINDOWS HOST:
+      ports:
+      - "127.0.0.1:8000:8000"    # different in linux
       volumes:
         - ../backend:/app
       environment:

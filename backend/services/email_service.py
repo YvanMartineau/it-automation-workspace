@@ -7,7 +7,7 @@ import aiosmtplib
 from google.oauth2.credentials import Credentials
 from google.auth.transport.requests import Request
 
-from settings import settings
+from settings import get_settings
 
 logger = logging.getLogger(__name__)
 
@@ -18,10 +18,10 @@ def _get_gmail_oauth2_access_token() -> str:
     """
     creds = Credentials(
         token=None,
-        refresh_token=settings.GMAIL_OAUTH_REFRESH_TOKEN,
+        refresh_token=get_settings.GMAIL_OAUTH_REFRESH_TOKEN,
         token_uri="https://oauth2.googleapis.com/token",
-        client_id=settings.GMAIL_OAUTH_CLIENT_ID,
-        client_secret=settings.GMAIL_OAUTH_CLIENT_SECRET,
+        client_id=get_settings.GMAIL_OAUTH_CLIENT_ID,
+        client_secret=get_settings.GMAIL_OAUTH_CLIENT_SECRET,
     )
     
     # Synchronously refresh the OAuth2 token
@@ -48,7 +48,7 @@ async def send_email_with_attachment(
 
     # 2. Build MIME Message
     message = MIMEMultipart()
-    message["From"] = settings.GMAIL_SENDER_EMAIL
+    message["From"] = get_settings.GMAIL_SENDER_EMAIL
     message["To"] = to_email
     message["Subject"] = subject
 
@@ -74,7 +74,7 @@ async def send_email_with_attachment(
     try:
         # XOAUTH2 Authentication
         await smtp_client.auth_xoauth2(
-            username=settings.GMAIL_SENDER_EMAIL,
+            username=get_settings.GMAIL_SENDER_EMAIL,
             access_token=access_token,
         )
         await smtp_client.send_message(message)
