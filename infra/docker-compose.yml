@@ -30,6 +30,44 @@ services:
       command: uvicorn main:app --host 0.0.0.0 --port 8000 --reload
 
 
+  openldap:
+    image: vegardit/openldap:latest
+    environment:
+      - LDAP_INIT_ORG_DN=DC=itautomation,DC=local
+      - LDAP_INIT_ORG_NAME=IT Automation Platform
+      - LDAP_INIT_ROOT_USER_DN=cn=admin,DC=itautomation,DC=local
+      - LDAP_INIT_ROOT_USER_PW=${LDAP_ADMIN_PASSWORD}
+      - LDAP_INIT_RFC2307BIS_SCHEMA=1   # groupOfNames + member/memberOf (DN-based), not memberUid
+      - LDAP_TLS_ENABLED=false          # internal Docker-network traffic only 
+    ports:
+      - "127.0.0.1:389:389"
+    volumes:
+      - ldap_data:/var/lib/ldap
+      - ldap_config:/etc/ldap/slapd.d
+    restart: unless-stopped
+    mem_limit: 256m
+
+  lam:
+    image: ghcr.io/ldapaccountmanager/lam:stable
+    environment:
+      - LAM_PASSWORD=${LDAP_ADMIN_PASSWORD}   # LAM's own config-screen password — reusing yours for simplicity
+      - LAM_LANG=en_US
+      - LDAP_SERVER=ldap://openldap:389
+      - LDAP_DOMAIN=itautomation.local
+      - LDAP_BASE_DN=${LDAP_INIT_ORG_DN}
+      - LDAP_USER=cn=admin,${LDAP_INIT_ORG_DN}
+      - DEBUG=true
+    ports:
+      - "127.0.0.1:8080:80"
+    volumes:
+      - lam_config:/var/lib/ldap-account-manager/config
+    depends_on:
+      - openldap
+    restart: unless-stopped
+    mem_limit: 256m
+    profiles: ["tools"]
+
+
   n8n:
     image: n8nio/n8n:latest
     ports:
@@ -43,6 +81,7 @@ services:
       - N8N_WEBHOOK_URL=http://localhost:5678
     restart: unless-stopped
     mem_limit: 2g   # CRITICAL — without this n8n can OOM-kill FastAPI
+
 
   postgres_local:
     image: postgres:16-alpine
@@ -67,6 +106,7 @@ services:
       retries: 5
     mem_limit: 256m
 
+
   pgadmin:
     image: dpage/pgadmin4:latest
     environment:
@@ -84,3 +124,6 @@ services:
 volumes:
   n8n_data:
   postgres_dev_data:
+  ldap_data:
+  ldap_config:
+  lam_config:

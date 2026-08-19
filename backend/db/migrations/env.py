@@ -25,6 +25,7 @@ from db.engine import Base
 from models.user import User
 from models.device import Device
 from models.audit_log import AuditLog
+from models.onboarded_user import OnboardedUser
 # add each new model import here as you build more
 config.set_main_option("sqlalchemy.url", get_settings().DEV_DATABASE_URL)
 

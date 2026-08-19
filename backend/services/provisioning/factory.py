@@ -10,6 +10,7 @@ from db.engine import get_db
 from services.provisioning.base import UserProvisioningService
 from services.provisioning.graph_provider import GraphProvisioningService
 from services.provisioning.local_provider import LocalDBProvisioningService
+from services.provisioning.ldap_provider import LdapProvisioningService
 from settings import get_settings
 
 settings = get_settings()
@@ -18,4 +19,6 @@ settings = get_settings()
 def get_provisioning_service(db: AsyncSession = Depends(get_db)) -> UserProvisioningService:
     if settings.IDENTITY_PROVIDER == "entra_id":
         return GraphProvisioningService()
+    if settings.IDENTITY_PROVIDER == "ldap":
+        return LdapProvisioningService()
     return LocalDBProvisioningService(db)

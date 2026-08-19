@@ -31,6 +31,7 @@ class OnboardedUserStatus(str, enum.Enum):
 
 class ProvisioningSource(str, enum.Enum):
     LOCAL = "local"
+    LDAP = "ldap"
     ENTRA_ID = "entra_id"
 
 

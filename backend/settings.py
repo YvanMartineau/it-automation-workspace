@@ -6,6 +6,7 @@ All secrets come from environment — never hardcoded.
 from pathlib import Path
 from functools import lru_cache
 from typing import Literal
+from pydantic import model_validator
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
 ENV_FILE_PATH = Path(__file__).resolve().parent.parent / ".env"
@@ -27,7 +28,25 @@ class Settings(BaseSettings):
     # Identity provisioning — provider-agnostic onboarding
     # "local": store onboarded users in our own DB (current, no Entra ID access yet)
     # "entra_id": provision via Microsoft Graph (future — requires GRAPH_* vars below)
-    IDENTITY_PROVIDER: Literal["local", "entra_id"] = "local"
+    IDENTITY_PROVIDER: Literal["local", "ldap", "entra_id"] = "ldap"
+
+    # LDAP directory (ADR-012) — required only once IDENTITY_PROVIDER="ldap"
+    LDAP_SERVER_URL: str = "ldap://localhost:389"
+    LDAP_BIND_DN: str = "cn=admin,DC=itautomation,DC=local"
+    LDAP_BIND_PASSWORD: str = ""
+    LDAP_ADMIN_PASSWORD: str = ""  # for docker-compose only
+    LDAP_BASE_DN: str = "DC=itautomation,DC=local"
+    LDAP_USERS_OU: str = "ou=Users,DC=itautomation,DC=local"
+    LDAP_GROUPS_OU: str = "ou=Groups,DC=itautomation,DC=local"
+
+    @model_validator(mode="after")
+    def _validate_identity_provider_config(self) -> "Settings":
+        if self.IDENTITY_PROVIDER == "ldap" and not self.LDAP_BIND_PASSWORD:
+            raise ValueError(
+                "IDENTITY_PROVIDER=ldap requires LDAP_BIND_PASSWORD — "
+                "refusing to start with an unauthenticated LDAP bind."
+            )
+        return self
 
     # Microsoft Graph
     #GRAPH_TENANT_ID: str

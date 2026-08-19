@@ -8,185 +8,126 @@ Usage:
     python -m backend.seed --confirm-prod  # required if DATABASE_URL is not localhost
 """
 
+import logging
+import os
 import asyncio
 import sys
 import time
 import uuid
 from datetime import datetime, timedelta, timezone
 
+from ldap3 import SUBTREE, Connection, Server
 from passlib.context import CryptContext
-from sqlalchemy import delete
+from sqlalchemy import select
 
 from db.engine import AsyncSessionLocal, engine
 from models.user import User
-from models.device import Device
-#from .models.audit_log import AuditLog
-#from .models.report_log import ReportLog
-from settings import Settings
+from settings import get_settings
 
 pwd_context = CryptContext(schemes=["bcrypt"], deprecated="auto")
 
-# Guard against accidental seeding of a production database
-#def _guard_against_prod():
-#    """
-#    Refuse to run against Aiven unless explicitly confirmed.
-#    This is the check that saves you from truncating your live demo DB
-#    by running `python -m backend.seed` on the wrong terminal tab.
-#    """
-#    is_local = "localhost" in settings.DEV_DATABASE_URL or "127.0.0.1" in settings.DEV_DATABASE_URL
-#    if not is_local and "--confirm-prod" not in sys.argv:
-#        print(
-#            "REFUSING TO RUN: DATABASE_URL does not look local "
-#            f"({settings.DEV_DATABASE_URL.split('@')[-1].split('/')[0]}).\n"
-#            "If you really mean to seed a remote DB, re-run with --confirm-prod."
-#        )
-#        sys.exit(1)
+logging.basicConfig(level=logging.INFO)
+logger = logging.getLogger(__name__)
+settings = get_settings()
 
-# Clear the mutable tables in the database. This is done before seeding to ensure a clean state.
-#async def _clear_existing(db):
-    # Order matters: no FK constraints run backwards, but audit_log is
-    # append-only at the DB-trigger level for UPDATE/DELETE too — so even
-    # the seed script's own cleanup pass has to be aware of that trigger.
-    # DELETE is blocked by design (see audit_trigger_sql in the schema).
-    # So instead of deleting audit_log rows, seed always starts from a
-    # freshly migrated (empty) DB in the demo runbook. Here we only clear
-    # the mutable tables.
-#    await db.execute(delete(ReportLog))
-#    await db.execute(delete(Device))
-#    await db.execute(delete(User))
-#    await db.commit()
+ENTRY_ALREADY_EXISTS = 68
 
 
-async def _seed_users(db) -> dict[str, User]:
-    admin = User(
-        id=uuid.uuid4(),
-        email="admin@dev.de",
-        hashed_password=pwd_context.hash("DemoAdmin!2026"), #("DemoViewer!2026"[:72]) 72 bit
-        role="admin",
-        is_active=True,
+# -----------------------------
+# LDAP STRUCTURE SEEDING
+# -----------------------------
+def seed_ldap_structure() -> None:
+    ldap_password = os.getenv("LDAP_BIND_PASSWORD")
+    if not ldap_password:
+        raise RuntimeError("Missing LDAP_BIND_PASSWORD environment variable")
+
+    server = Server(settings.LDAP_SERVER_URL)
+    conn = Connection(
+        server,
+        user=settings.LDAP_BIND_DN,
+        password=ldap_password,
+        auto_bind=True,
     )
-    viewer = User(
-        id=uuid.uuid4(),
-        email="viewer@dev.de",
-        hashed_password=pwd_context.hash("DemoViewer!2026"),
-        role="viewer",
-        is_active=True,
-    )
-    db.add_all([admin, viewer])
-    await db.commit()
-    return {"admin": admin, "viewer": viewer}
 
-
-async def _seed_devices(db) -> list[Device]:
-    now = datetime.now(timezone.utc)
-    devices = []
-    statuses = ["online", "online", "online", "offline", "unknown"]
-    for i in range(1, 11):
-        status = statuses[i % len(statuses)]
-        devices.append(
-            Device(
-                id=uuid.uuid4(),
-                hostname=f"ws-{i:03d}.demo.local",
-                ip_address=f"192.168.1.{i + 10}",
-                mac_address=f"02:00:00:00:{i:02x}:{(i*3)%256:02x}",
-                status=status,
-                cpu_percent=None if status == "offline" else round(10 + (i * 7) % 90, 1),
-                memory_percent=None if status == "offline" else round(20 + (i * 11) % 70, 1),
-                os_info="Windows 11 Pro" if i % 3 else "Ubuntu 24.04 LTS",
-                last_seen=None if status == "offline" else now - timedelta(minutes=i),
-            )
+    for ou_dn in (settings.LDAP_USERS_OU, settings.LDAP_GROUPS_OU):
+        ou_name = ou_dn.split(",")[0].split("=")[1]
+        added = conn.add(
+            ou_dn,
+            object_class=["organizationalUnit"],
+            attributes={"ou": ou_name},
         )
-    db.add_all(devices)
+        if added:
+            logger.info("Created LDAP container: %s", ou_dn)
+        elif conn.result.get("result") == ENTRY_ALREADY_EXISTS:
+            logger.info("Already exists, skipping: %s", ou_dn)
+        else:
+            raise RuntimeError(f"Failed to create '{ou_dn}': {conn.result}")
+
+    conn.unbind()
+
+
+# -----------------------------
+# USER SEEDING
+# -----------------------------
+async def _seed_users(db) -> dict[str, User]:
+    seed_data = [
+        {
+            "email": os.getenv("SEED_ADMIN_EMAIL", "admin@demo.local"),
+            "password": os.getenv("SEED_ADMIN_PASSWORD"),
+            "role": "admin",
+        },
+        {
+            "email": os.getenv("SEED_VIEWER_EMAIL", "viewer@demo.local"),
+            "password": os.getenv("SEED_VIEWER_PASSWORD"),
+            "role": "viewer",
+        },
+    ]
+
+    users: dict[str, User] = {}
+
+    for entry in seed_data:
+        if not entry["password"]:
+            raise RuntimeError(
+                f"Missing password for seeded user: {entry['email']}. "
+                "Set SEED_ADMIN_PASSWORD / SEED_VIEWER_PASSWORD."
+            )
+
+        result = await db.execute(select(User).where(User.email == entry["email"]))
+        existing = result.scalar_one_or_none()
+
+        if existing:
+            logger.info("User already exists, skipping: %s", entry["email"])
+            users[entry["role"]] = existing
+            continue
+
+        user = User(
+            id=uuid.uuid4(),
+            email=entry["email"],
+            hashed_password=pwd_context.hash(entry["password"]),
+            role=entry["role"],
+            is_active=True,
+        )
+        db.add(user)
+        users[entry["role"]] = user
+
     await db.commit()
-    return devices
-
-#TODO When Audit Log is implemented.
-#async def _seed_audit_logs(db, admin: User):
-#    # Direct INSERT is fine — the trigger only blocks UPDATE/DELETE.
-#    now = datetime.now(timezone.utc)
-#    entries = [
-#        AuditLog(
-#            id=uuid.uuid4(),
-#            actor=admin.email,
-#            action="auth.login",
-#            target_type=None,
-#            target_id=None,
-#            payload={"ip": "203.0.113.10"},
-#            timestamp=now - timedelta(days=2),
-#        ),
-#        AuditLog(
-#            id=uuid.uuid4(),
-#            actor=admin.email,
-#            action="device.scan.start",
-#            target_type="subnet",
-#            target_id="192.168.1.0/24",
-#            payload={"triggered_via": "seed"},
-#            timestamp=now - timedelta(days=2, minutes=-5),
-#        ),
-#        AuditLog(
-#            id=uuid.uuid4(),
-#            actor=admin.email,
-#            action="user.onboard",
-#            target_type="user",
-#            target_id="demo-graph-user-id-0001",
-#            payload={"department": "IT", "role": "Support Technician"},
-#            timestamp=now - timedelta(days=1),
-#        ),
-#    ]
-#    db.add_all(entries)
-#    await db.commit()
-
-#TODO When Report Log is implemented.
-#async def _seed_report_logs(db):
-#    now = datetime.now(timezone.utc)
-#    logs = [
-#        ReportLog(
-#            id=uuid.uuid4(),
-#            report_type="scheduled_weekly",
-#            triggered_by="scheduler",
-#            recipient_email="admin@demo.local",
-#            status="sent",
-#            sent_at=now - timedelta(days=7),
-#            error_message=None,
-#        ),
-#        ReportLog(
-#            id=uuid.uuid4(),
-#            report_type="manual",
-#            triggered_by="admin@demo.local",
-#            recipient_email="admin@demo.local",
-#            status="sent",
-#            sent_at=now - timedelta(days=1),
-#            error_message=None,
-#        ),
-#    ]
-#    db.add_all(logs)
-#    await db.commit()
+    return users
 
 
+# -----------------------------
+# MAIN
+# -----------------------------
 async def main():
-#    _guard_against_prod()
     start = time.perf_counter()
 
     async with AsyncSessionLocal() as db:
-#        print("Clearing mutable tables...")
-#        await _clear_existing(db)
-
         print("Seeding users...")
         users = await _seed_users(db)
 
-        print("Seeding devices...")
-        await _seed_devices(db)
-
-#        print("Seeding audit log history...")
-#        await _seed_audit_logs(db, users["admin"])
-
-#        print("Seeding report history...")
-#        await _seed_report_logs(db)
-
     elapsed = time.perf_counter() - start
     print(f"\nSeed complete in {elapsed:.2f}s.")
-    print("  admin@demo.local / DemoAdmin!2026")
-    print("  viewer@demo.local / DemoViewer!2026")
+    print("  admin@demo.local (password from SEED_ADMIN_PASSWORD)")
+    print("  viewer@demo.local (password from SEED_VIEWER_PASSWORD)")
 
     if elapsed > 90:
         print("WARNING: seed exceeded the 90s target.")
@@ -195,4 +136,5 @@ async def main():
 
 
 if __name__ == "__main__":
+    seed_ldap_structure()
     asyncio.run(main())
