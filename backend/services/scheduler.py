@@ -1,42 +1,15 @@
-"""
-services/scheduler.py
-
-APScheduler jobs, started/stopped from main.py's lifespan.
-
-Currently implements: scheduled network discovery scan, per the project's
-own decision ("Scheduled full discovery scan: every 10-15 minutes").
-Weekly report generation and alert-check jobs are spec'd for this module
-too, but are NOT implemented here — the services they'd depend on
-(pdf_service/email_service, alerting logic) haven't been built yet, and
-scheduling a job against something that doesn't exist would just fail
-silently on every interval instead of doing anything useful.
-
-Design notes:
-  - AsyncIOScheduler runs jobs directly on FastAPI's existing event loop —
-    no separate thread/process. Fine for an I/O-bound job like this one.
-  - _run_scheduled_discovery_scan() reuses scanner.run_scan() rather than
-    duplicating scan orchestration — the scheduled path and the on-demand
-    POST /scan path behave identically, just triggered differently.
-  - Every job function is wrapped in a broad try/except. APScheduler
-    silently drops an exception raised inside a fired job by default —
-    without this, a single failed scan could vanish with no clear log
-    entry instead of a traceback tied to "scheduled discovery scan failed".
-  - max_instances=1 + coalesce=True: if a scan run is still in progress
-    when the next interval fires, don't stack a second one on top of it,
-    and if a tick is missed entirely (process was busy/restarting), only
-    catch up with one run, not one per missed interval.
-"""
-
 import logging
 import uuid
-
 from apscheduler.schedulers.asyncio import AsyncIOScheduler
 from apscheduler.triggers.interval import IntervalTrigger
+from apscheduler.triggers.cron import CronTrigger
 from pydantic import ValidationError
 
 from db.engine import AsyncSessionLocal
+from models.report_log import ReportType
 from schemas.scan import ScanRequest
 from services import scanner
+from services.report_service import generate_and_send_report_task
 from settings import get_settings
 
 logger = logging.getLogger(__name__)
@@ -45,19 +18,12 @@ settings = get_settings()
 
 _scheduler: AsyncIOScheduler | None = None
 
-# 10-15 minutes was the agreed range; 10 chosen as the floor rather than
-# the ceiling — easy to widen later, and the semaphore-bounded scanner is
-# cheap enough at typical home/small-office subnet sizes not to need the
-# extra margin yet.
 DISCOVERY_SCAN_INTERVAL_MINUTES = 10
-
-# Per the AuditLog model's own documented convention for the `actor`
-# column ("username or 'system'") — distinct from any real user's email.
-SCHEDULED_SCAN_ACTOR = "system"
+SCHEDULED_ACTOR = "system"
 
 
 async def _run_scheduled_discovery_scan(subnet: str) -> None:
-    """The job body APScheduler actually fires on each interval."""
+    """The discovery scan job body APScheduler actually fires on each interval."""
     try:
         job_id = uuid.uuid4()
         scanner.create_job(job_id, subnet)
@@ -65,11 +31,30 @@ async def _run_scheduled_discovery_scan(subnet: str) -> None:
         await scanner.run_scan(
             job_id=job_id,
             subnet=subnet,
-            actor=SCHEDULED_SCAN_ACTOR,
+            actor=SCHEDULED_ACTOR,
             session_factory=AsyncSessionLocal,
         )
     except Exception:
         logger.exception("Scheduled discovery scan failed")
+
+
+async def _run_weekly_report_job() -> None:
+    """The weekly report job body APScheduler fires every Monday at 08:00 AM."""
+    report_id = uuid.uuid4()
+    recipient_email = settings.GMAIL_SENDER_EMAIL
+    logger.info("Starting scheduled weekly report generation report_id=%s recipient=%s", report_id, recipient_email)
+    
+    try:
+        await generate_and_send_report_task(
+            report_id=report_id,
+            recipient_email=recipient_email,
+            triggered_by=SCHEDULED_ACTOR,
+            db_factory=AsyncSessionLocal,
+            report_type=ReportType.SCHEDULED_WEEKLY,
+        )
+        logger.info("Successfully completed weekly report job report_id=%s", report_id)
+    except Exception:
+        logger.exception("Scheduled weekly report generation failed")
 
 
 def start_scheduler() -> None:
@@ -78,11 +63,6 @@ def start_scheduler() -> None:
         logger.warning("start_scheduler() called but a scheduler is already running")
         return
 
-    # Validate once, at app startup — reuses the exact same rule
-    # POST /scan enforces (private RFC 1918 only, capped at /22), so a
-    # misconfigured ALLOWED_SCAN_SUBNET in .env fails loudly here instead
-    # of quietly failing _run_scheduled_discovery_scan() every 10 minutes
-    # for the life of the process.
     try:
         validated_subnet = ScanRequest(subnet=settings.ALLOWED_SCAN_SUBNET).subnet
     except ValidationError as err:
@@ -90,6 +70,8 @@ def start_scheduler() -> None:
         raise
 
     _scheduler = AsyncIOScheduler()
+
+    # 1. Scheduled Network Discovery Scan Job
     _scheduler.add_job(
         _run_scheduled_discovery_scan,
         trigger=IntervalTrigger(minutes=DISCOVERY_SCAN_INTERVAL_MINUTES),
@@ -99,9 +81,20 @@ def start_scheduler() -> None:
         coalesce=True,
         replace_existing=True,
     )
+
+    # 2. Scheduled Weekly Executive Report Job (Every Monday at 08:00 AM)
+    _scheduler.add_job(
+        _run_weekly_report_job,
+        trigger=CronTrigger(day_of_week="mon", hour=8, minute=0),
+        id="weekly_report",
+        max_instances=1,
+        coalesce=True,
+        replace_existing=True,
+    )
+
     _scheduler.start()
     logger.info(
-        "Scheduler started — discovery scan every %s minutes against %s",
+        "Scheduler started — discovery scan every %s minutes against %s | Weekly report Mondays @ 08:00",
         DISCOVERY_SCAN_INTERVAL_MINUTES,
         validated_subnet,
     )

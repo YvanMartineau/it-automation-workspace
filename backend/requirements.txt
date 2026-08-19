@@ -12,6 +12,8 @@ aiosignal==1.4.0
     # via
     #   -r backend/requirements.txt
     #   aiohttp
+aiosmtplib==3.0.0
+    # via -r backend/requirements.txt
 alembic==1.13.3
     # via -r backend/requirements.txt
 annotated-types==0.7.0
@@ -181,6 +183,14 @@ markupsafe==3.0.3
     #   -r backend/requirements.txt
     #   jinja2
     #   mako
+matplotlib==3.8.2
+    # via
+    #   -r backend/requirements.txt
+    #   weasyprint
+matplotlib.pyplot==0.1.1
+    # via
+    #   -r backend/requirements.txt
+    #   weasyprint
 microsoft-kiota-abstractions==1.11.7
     # via
     #   -r backend/requirements.txt
