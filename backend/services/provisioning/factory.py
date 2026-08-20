@@ -15,10 +15,15 @@ from settings import get_settings
 
 settings = get_settings()
 
-
-def get_provisioning_service(db: AsyncSession = Depends(get_db)) -> UserProvisioningService:
+def build_provisioning_service(db: AsyncSession) -> UserProvisioningService:
+    """Plain constructor — usable from background tasks/scripts, not just route handlers."""
     if settings.IDENTITY_PROVIDER == "entra_id":
         return GraphProvisioningService()
     if settings.IDENTITY_PROVIDER == "ldap":
         return LdapProvisioningService()
     return LocalDBProvisioningService(db)
+
+
+def get_provisioning_service(db: AsyncSession = Depends(get_db)) -> UserProvisioningService:
+    """FastAPI dependency wrapper — use this in route signatures only."""
+    return build_provisioning_service(db)

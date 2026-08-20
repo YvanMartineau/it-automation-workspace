@@ -1,3 +1,4 @@
+#models/onboarded_user.py
 """
 New-hire identity record.
 
@@ -34,6 +35,13 @@ class ProvisioningSource(str, enum.Enum):
     LDAP = "ldap"
     ENTRA_ID = "entra_id"
 
+class OnboardJobStatus(str, enum.Enum):
+    PENDING = "PENDING"
+    AD_CREATING = "AD_CREATING"
+    EMAIL_SENDING = "EMAIL_SENDING"
+    JIRA_CREATING = "JIRA_CREATING"
+    COMPLETED = "COMPLETED"
+    FAILED = "FAILED"
 
 class OnboardedUser(Base):
     __tablename__ = "onboarded_user"
@@ -56,6 +64,17 @@ class OnboardedUser(Base):
         default=ProvisioningSource.LOCAL,
     )
     external_id: Mapped[str | None] = mapped_column(String(255), nullable=True)
+
+    # New: operational-record fields. Deliberately separate from `status`
+    # (active/offboarded — the person's current access state) — job_status
+    # tracks the ONBOARDING OPERATION itself, and stops changing once it
+    # reaches COMPLETED or FAILED.
+    job_id: Mapped[str | None] = mapped_column(String(36), nullable=True, index=True)
+    job_status: Mapped[OnboardJobStatus] = mapped_column(
+        SAEnum(OnboardJobStatus, name="onboard_job_status"), nullable=False, default=OnboardJobStatus.PENDING
+    )
+    requested_by: Mapped[str | None] = mapped_column(String(255), nullable=True)
+    error_message: Mapped[str | None] = mapped_column(String(1000), nullable=True)
 
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())
     updated_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), onupdate=func.now())

@@ -58,7 +58,8 @@ class Settings(BaseSettings):
     # at request time; leaving this unset must not crash startup or block onboarding.
     N8N_ONBOARDING_WEBHOOK_URL: str = ""
     N8N_WEBHOOK_TIMEOUT_SECONDS: int = 5
-
+    N8N_OFFBOARDING_WEBHOOK_URL: str = ""
+    N8N_CALLBACK_SECRET: str = ""
 
     # Gmail OAuth2
     #GMAIL_OAUTH_CLIENT_ID: str

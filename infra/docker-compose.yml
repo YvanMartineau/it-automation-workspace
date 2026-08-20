@@ -6,28 +6,28 @@
 
 services:
   fastapi:
-      build:
-        context: ../backend
-        dockerfile: Dockerfile
-      env_file: ../.env
+    build:
+      context: ../backend
+      dockerfile: Dockerfile
+    env_file: ../.env
 # ports What removed Because we want Docker to access the local network on which it is running (needed for nmap to work right)
 #    ports:
 #      - "127.0.0.1:8000:8000"
-      network_mode: "host"     # shares the (now-mirrored) host network instead of the isolated bridge
-      volumes:
-        - ../backend:/app
-      environment:
-        - DATABASE_URL=postgresql+asyncpg://dev:dev@localhost:5432/automation_dev
-        - DEV_DATABASE_URL=postgresql+asyncpg://dev:dev@localhost:5432/automation_dev
-      cap_add:
-        - NET_RAW           # lets nmap do real ICMP/ARP discovery without running the process as root
-        - NET_ADMIN         # commonly needed alongside NET_RAW for ARP scanning specifically
-      depends_on:
-        postgres_local:
-          condition: service_healthy
-      restart: unless-stopped
-      mem_limit: 512m
-      command: uvicorn main:app --host 0.0.0.0 --port 8000 --reload
+    network_mode: "host"     # shares the (now-mirrored) host network instead of the isolated bridge
+    volumes:
+      - ../backend:/app
+    environment:
+      - DATABASE_URL=postgresql+asyncpg://dev:dev@localhost:5432/automation_dev
+      - DEV_DATABASE_URL=postgresql+asyncpg://dev:dev@localhost:5432/automation_dev
+    cap_add:
+      - NET_RAW           # lets nmap do real ICMP/ARP discovery without running the process as root
+      - NET_ADMIN         # commonly needed alongside NET_RAW for ARP scanning specifically
+    depends_on:
+      postgres_local:
+        condition: service_healthy
+    restart: unless-stopped
+    mem_limit: 512m
+    command: uvicorn main:app --host 0.0.0.0 --port 8000 --reload
 
 
   openldap:
@@ -72,6 +72,8 @@ services:
     image: n8nio/n8n:latest
     ports:
       - "5678:5678"
+    extra_hosts:
+      - "host.docker.internal:host-gateway"
     volumes:
       - n8n_data:/home/node/.n8n
       - ./n8n-workflows:/home/node/.n8n/workflows:ro

@@ -31,3 +31,21 @@ class OffboardResponse(BaseModel):
     user_id: UUID
     status: str
     offboarded_at: datetime | None
+
+
+class OnboardedUserListItem(BaseModel):
+    model_config = ConfigDict(from_attributes=True)
+    user_id: UUID = Field(validation_alias="id")
+    external_id: str | None
+    first_name: str
+    last_name: str
+    email: EmailStr
+    department: str
+    job_title: str
+    status: str
+    job_status: str
+    provisioning_source: str
+    requested_by: str | None
+    error_message: str | None
+    created_at: datetime
+    offboarded_at: datetime | None
