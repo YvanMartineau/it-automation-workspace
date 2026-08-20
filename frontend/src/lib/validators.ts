@@ -2,11 +2,12 @@
 import { z } from "zod";
 
 export const onboardingFormSchema = z.object({
-  name: z.string().min(2, "Name muss mindestens 2 Zeichen lang sein."),
+  first_name: z.string().min(2, "Vorname muss mindestens 2 Zeichen lang sein."),
+  last_name: z.string().min(2, "Nachname muss mindestens 2 Zeichen lang sein."),
+  email: z.string().email("Ungültige E-Mail-Adresse."),
   department: z.string().min(2, "Abteilung ist erforderlich."),
-  role: z.string().min(2, "Rolle ist erforderlich."),
-  // Future-proofed: defaults to local_db for now
-  source: z.enum(["local_db", "entra_id"]).default("local_db"), 
+  job_title: z.string().min(2, "Berufsbezeichnung ist erforderlich."),
+  provisioning_source: z.enum(["local", "ldap", "entra_id"]).default("local"),
 });
 
 export type OnboardingFormValues = z.infer<typeof onboardingFormSchema>;

@@ -3,7 +3,7 @@ import { useState } from "react";
 import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from "#/components/ui/dialog";
-import { Form, FormControl, FormField, FormItem, FormLabel, FormMessage } from "#/components/ui/form"; // Assume standard shadcn form
+import { Form, FormControl, FormField, FormItem, FormLabel, FormMessage } from "#/components/ui/form";
 import { Input } from "#/components/ui/input";
 import { Button } from "#/components/ui/button";
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "#/components/ui/tooltip";
@@ -18,10 +18,12 @@ export function OnboardingFormDialog() {
   const form = useForm<OnboardingFormValues>({
     resolver: zodResolver(onboardingFormSchema),
     defaultValues: {
-      name: "",
+      first_name: "",
+      last_name: "",
+      email: "",
       department: "",
-      role: "",
-      source: "local_db",
+      job_title: "",
+      provisioning_source: "local",
     },
   });
 
@@ -36,57 +38,79 @@ export function OnboardingFormDialog() {
 
   return (
     <Dialog open={open} onOpenChange={setOpen}>
-      <DialogTrigger
-        className="inline-flex items-center justify-center gap-2 rounded-md bg-primary px-4 py-2 text-sm font-medium text-primary-foreground shadow transition-colors hover:bg-primary/90 disabled:pointer-events-none disabled:opacity-50"
-      >
-        <Plus className="h-4 w-4" />
-        Onboarding starten
+      <DialogTrigger>
+        <Button>
+          <Plus className="mr-2 h-4 w-4" />
+          Onboarding starten
+        </Button>
       </DialogTrigger>
-      <DialogContent className="sm:max-w-[425px]">
+      <DialogContent className="sm:max-w-[500px]">
         <DialogHeader>
           <DialogTitle>Neuen Onboarding-Vorgang erstellen</DialogTitle>
         </DialogHeader>
         <Form {...form}>
           <form onSubmit={form.handleSubmit(onSubmit)} className="space-y-4 pt-4">
+            <div className="grid grid-cols-2 gap-4">
+              <FormField
+                control={form.control}
+                name="first_name"
+                render={({ field }) => (
+                  <FormItem>
+                    <FormLabel>Vorname</FormLabel>
+                    <FormControl><Input placeholder="Max" {...field} /></FormControl>
+                    <FormMessage />
+                  </FormItem>
+                )}
+              />
+              <FormField
+                control={form.control}
+                name="last_name"
+                render={({ field }) => (
+                  <FormItem>
+                    <FormLabel>Nachname</FormLabel>
+                    <FormControl><Input placeholder="Mustermann" {...field} /></FormControl>
+                    <FormMessage />
+                  </FormItem>
+                )}
+              />
+            </div>
+
             <FormField
               control={form.control}
-              name="name"
+              name="email"
               render={({ field }) => (
                 <FormItem>
-                  <FormLabel>Vollständiger Name</FormLabel>
-                  <FormControl>
-                    <Input placeholder="z.B. Max Mustermann" {...field} />
-                  </FormControl>
+                  <FormLabel>E-Mail</FormLabel>
+                  <FormControl><Input type="email" placeholder="max.mustermann@company.com" {...field} /></FormControl>
                   <FormMessage />
                 </FormItem>
               )}
             />
-            <FormField
-              control={form.control}
-              name="department"
-              render={({ field }) => (
-                <FormItem>
-                  <FormLabel>Abteilung</FormLabel>
-                  <FormControl>
-                    <Input placeholder="z.B. Engineering" {...field} />
-                  </FormControl>
-                  <FormMessage />
-                </FormItem>
-              )}
-            />
-            <FormField
-              control={form.control}
-              name="role"
-              render={({ field }) => (
-                <FormItem>
-                  <FormLabel>Rolle / Position</FormLabel>
-                  <FormControl>
-                    <Input placeholder="z.B. Software Engineer" {...field} />
-                  </FormControl>
-                  <FormMessage />
-                </FormItem>
-              )}
-            />
+
+            <div className="grid grid-cols-2 gap-4">
+              <FormField
+                control={form.control}
+                name="department"
+                render={({ field }) => (
+                  <FormItem>
+                    <FormLabel>Abteilung</FormLabel>
+                    <FormControl><Input placeholder="Engineering" {...field} /></FormControl>
+                    <FormMessage />
+                  </FormItem>
+                )}
+              />
+              <FormField
+                control={form.control}
+                name="job_title"
+                render={({ field }) => (
+                  <FormItem>
+                    <FormLabel>Berufsbezeichnung</FormLabel>
+                    <FormControl><Input placeholder="Software Engineer" {...field} /></FormControl>
+                    <FormMessage />
+                  </FormItem>
+                )}
+              />
+            </div>
 
             <div className="flex gap-3 pt-2">
               <Button 
@@ -101,10 +125,10 @@ export function OnboardingFormDialog() {
                 <Tooltip>
                   <TooltipTrigger>
                     <div className="flex-1">
-                      <Button
-                        type="button"
-                        variant="outline"
-                        className="w-full opacity-60 cursor-not-allowed"
+                      <Button 
+                        type="button" 
+                        variant="outline" 
+                        className="w-full opacity-60 cursor-not-allowed" 
                         disabled
                       >
                         <Lock className="mr-2 h-4 w-4" />

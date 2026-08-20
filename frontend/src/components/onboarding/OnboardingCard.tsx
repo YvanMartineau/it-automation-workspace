@@ -3,11 +3,11 @@ import { Card, CardContent, CardHeader, CardTitle } from "#/components/ui/card";
 import { Badge } from "#/components/ui/badge";
 import { Button } from "#/components/ui/button";
 import { CheckCircle2, Circle, XCircle, Loader2, Terminal } from "lucide-react";
-import type { OnboardingRecord, OnboardingStatus } from "#/types/onboard";
+import type { OnboardingRecord, OnboardingWorkflowStatus } from "#/types/onboarding";
 import { useRetryOnboarding } from "#/hooks/useOnboarding";
 import { useState } from "react";
 
-const STEPS: { key: OnboardingStatus; label: string }[] = [
+const STEPS: { key: OnboardingWorkflowStatus; label: string }[] = [
   { key: "PENDING", label: "Ausstehend" },
   { key: "AD_CREATING", label: "AD wird erstellt" },
   { key: "EMAIL_SENDING", label: "E-Mail wird gesendet" },
@@ -15,7 +15,7 @@ const STEPS: { key: OnboardingStatus; label: string }[] = [
   { key: "COMPLETED", label: "Abgeschlossen" },
 ];
 
-const statusConfig: Record<OnboardingStatus, { color: string; icon: React.ReactNode }> = {
+const statusConfig: Record<OnboardingWorkflowStatus, { color: string; icon: React.ReactNode }> = {
   PENDING: { color: "bg-muted text-muted-foreground", icon: <Circle className="h-4 w-4" /> },
   AD_CREATING: { color: "bg-blue-500/10 text-blue-500", icon: <Loader2 className="h-4 w-4 animate-spin" /> },
   EMAIL_SENDING: { color: "bg-blue-500/10 text-blue-500", icon: <Loader2 className="h-4 w-4 animate-spin" /> },
@@ -31,22 +31,23 @@ interface OnboardingCardProps {
 export function OnboardingCard({ record }: OnboardingCardProps) {
   const retryMutation = useRetryOnboarding();
   const [showLogs, setShowLogs] = useState(false);
-  const config = statusConfig[record.status];
+  const config = statusConfig[record.workflow_status];
 
-  const currentStepIndex = STEPS.findIndex((s) => s.key === record.status);
-  const displaySteps = record.status === "FAILED" ? STEPS : STEPS.slice(0, currentStepIndex + 1);
+  const currentStepIndex = STEPS.findIndex((s) => s.key === record.workflow_status);
+  const displaySteps = record.workflow_status === "FAILED" ? STEPS : STEPS.slice(0, currentStepIndex + 1);
 
   return (
     <Card className="hover:shadow-md transition-shadow border-l-4 border-l-primary/50">
       <CardHeader className="pb-3">
         <div className="flex justify-between items-start">
           <div>
-            <CardTitle className="text-base font-semibold">{record.name}</CardTitle>
-            <p className="text-sm text-muted-foreground mt-1">{record.role} • {record.department}</p>
+            <CardTitle className="text-base font-semibold">{record.first_name} {record.last_name}</CardTitle>
+            <p className="text-sm text-muted-foreground mt-1">{record.job_title} • {record.department}</p>
+            <p className="text-xs text-muted-foreground/70 mt-0.5">{record.email}</p>
           </div>
           <Badge variant="outline" className={`${config.color} border-0 flex items-center gap-1.5`}>
             {config.icon}
-            {record.status === "FAILED" ? "Fehlgeschlagen" : record.status.replace("_", " ")}
+            {record.workflow_status === "FAILED" ? "Fehlgeschlagen" : record.workflow_status.replace("_", " ")}
           </Badge>
         </div>
       </CardHeader>
@@ -55,8 +56,8 @@ export function OnboardingCard({ record }: OnboardingCardProps) {
         {/* Vertical Step Indicator */}
         <div className="space-y-2">
           {displaySteps.map((step, idx) => {
-            const isCompleted = idx < currentStepIndex && record.status !== "FAILED";
-            const isCurrent = idx === currentStepIndex && record.status !== "FAILED";
+            const isCompleted = idx < currentStepIndex && record.workflow_status !== "FAILED";
+            const isCurrent = idx === currentStepIndex && record.workflow_status !== "FAILED";
             
             return (
               <div key={step.key} className="flex items-center gap-3 text-sm">
@@ -82,19 +83,19 @@ export function OnboardingCard({ record }: OnboardingCardProps) {
           >
             <span className="flex items-center gap-2">
               <Terminal className="h-3.5 w-3.5" />
-              Simulations-Protokoll (n8n Webhooks)
+              Simulations-Protokoll (n8n)
             </span>
             <span>{showLogs ? "▲" : "▼"}</span>
           </button>
           {showLogs && (
             <div className="p-3 bg-black/90 text-green-400 text-[11px] font-mono overflow-x-auto max-h-40 overflow-y-auto whitespace-pre-wrap">
-              {record.simulationLog.join("\n\n")}
+              {record.simulation_log.join("\n\n")}
             </div>
           )}
         </div>
 
         {/* Actions */}
-        {record.status === "FAILED" && (
+        {record.workflow_status === "FAILED" && (
           <Button 
             size="sm" 
             className="w-full"

@@ -1,5 +1,5 @@
 // src/mocks/onboarding.mock.ts
-import type { OnboardingRecord, OnboardingStatus, CreateOnboardingRequest } from "#/types/onboard";
+import type { OnboardingRecord, OnboardingStatus, CreateOnboardingRequest } from "#types/onboarding.ts";
 
 const MOCK_DELAY = 800; // Simulate network latency
 

@@ -3,7 +3,7 @@ import { useOnboardingList } from "#/hooks/useOnboarding";
 import { OnboardingCard } from "#/components/onboarding/OnboardingCard";
 import { OnboardingFormDialog } from "#/components/onboarding/OnboardingFormDialog";
 import { TableSkeleton } from "#/components/feedback/TableSkeleton"; // Assuming this exists
-import type { OnboardingStatus } from "#/types/onboard";
+import type { OnboardingStatus } from "#types/onboarding.ts";
 
 const COLUMNS: { id: OnboardingStatus | "ALL"; label: string }[] = [
   { id: "ALL", label: "Alle" },
