@@ -10,7 +10,7 @@ provider is a settings.IDENTITY_PROVIDER flip, not a rewrite.
 from abc import ABC, abstractmethod
 from dataclasses import dataclass
 from uuid import UUID
-
+from datetime import datetime
 
 @dataclass(frozen=True)
 class ProvisionedUser:
@@ -27,6 +27,7 @@ class ProvisionedUser:
     job_title: str
     status: str
     provisioning_source: str
+    offboarded_at: datetime | None = None
 
 
 class UserProvisioningService(ABC):
@@ -41,5 +42,7 @@ class UserProvisioningService(ABC):
         """Attach a credential, if the provider supports it."""
 
     @abstractmethod
-    async def deactivate_user(self, user_id: UUID) -> None:
-        """Offboard — always a soft-delete (status flip), never a hard delete."""
+    async def deactivate_user(self, user_id: UUID) -> ProvisionedUser:
+        """Offboard — always a soft-delete, never a hard delete. Idempotent:
+        calling this on an already-offboarded user returns the existing
+        record unchanged, never re-stamping offboarded_at to 'now'."""

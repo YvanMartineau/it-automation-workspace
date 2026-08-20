@@ -122,25 +122,46 @@ class LdapProvisioningService(UserProvisioningService):
         finally:
             conn.unbind()
 
-    def _deactivate_user_sync(self, user_id: UUID) -> None:
+    def _deactivate_user_sync(self, user_id: UUID) -> ProvisionedUser:
         conn = self._connect()
         try:
-            conn.search(settings.LDAP_USERS_OU, f"(employeeNumber={user_id})", search_scope=SUBTREE)
+            conn.search(
+                settings.LDAP_USERS_OU,
+                f"(employeeNumber={user_id})",
+                search_scope=SUBTREE,
+                attributes=["givenName", "sn", "mail", "departmentNumber", "title", "description"],
+            )
             if not conn.entries:
                 raise NotFoundError(f"No directory entry found for user_id '{user_id}'")
-            user_dn = conn.entries[0].entry_dn
+            entry = conn.entries[0]
+            user_dn = entry.entry_dn
+            current_description = str(entry.description) if "description" in entry else ""
 
-            # Revoke access: pull the user out of every group they're in.
-            conn.search(settings.LDAP_GROUPS_OU, f"(member={user_dn})", search_scope=SUBTREE, attributes=["member"])
-            for entry in conn.entries:
-                conn.modify(entry.entry_dn, {"member": [(MODIFY_DELETE, [user_dn])]})
+            if current_description.startswith("offboarded:"):
+                offboarded_at = datetime.fromisoformat(current_description.split("offboarded:", 1)[1])
+            else:
+                conn.search(settings.LDAP_GROUPS_OU, f"(member={user_dn})", search_scope=SUBTREE, attributes=["member"])
+                for grp in conn.entries:
+                    conn.modify(grp.entry_dn, {"member": [(MODIFY_DELETE, [user_dn])]})
 
-            conn.modify(user_dn, {
-                "description": [(MODIFY_REPLACE, [f"offboarded:{datetime.now(timezone.utc).isoformat()}"])]
-            })
+                offboarded_at = datetime.now(timezone.utc)
+                conn.modify(user_dn, {"description": [(MODIFY_REPLACE, [f"offboarded:{offboarded_at.isoformat()}"])]})
+
+            return ProvisionedUser(
+                user_id=user_id,
+                external_id=user_dn,
+                first_name=str(entry.givenName) if "givenName" in entry else "",
+                last_name=str(entry.sn) if "sn" in entry else "",
+                email=str(entry.mail) if "mail" in entry else "",
+                department=str(entry.departmentNumber) if "departmentNumber" in entry else "",
+                job_title=str(entry.title) if "title" in entry else "",
+                status="offboarded",
+                provisioning_source="ldap",
+                offboarded_at=offboarded_at,
+            )
         finally:
             conn.unbind()
-
+            
     # ---- async interface ----
 
     async def create_user(self, *, first_name, last_name, email, department, job_title) -> ProvisionedUser:
@@ -159,9 +180,9 @@ class LdapProvisioningService(UserProvisioningService):
         except LDAPException as err:
             raise ExternalServiceError(f"LDAP password set failed: {err}") from err
 
-    async def deactivate_user(self, user_id: UUID) -> None:
+    async def deactivate_user(self, user_id: UUID) -> ProvisionedUser:
         loop = asyncio.get_running_loop()
         try:
-            await loop.run_in_executor(None, self._deactivate_user_sync, user_id)
+            return await loop.run_in_executor(None, self._deactivate_user_sync, user_id)
         except LDAPException as err:
             raise ExternalServiceError(f"LDAP deactivation failed: {err}") from err

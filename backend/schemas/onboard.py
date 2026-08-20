@@ -1,5 +1,5 @@
 from uuid import UUID
-
+from datetime import datetime
 from pydantic import BaseModel, ConfigDict, EmailStr, Field
 
 
@@ -22,3 +22,12 @@ class OnboardResponse(BaseModel):
     status: str
     provisioning_source: str
     temporary_password: str        # returned once only — never persisted, never logged
+
+
+
+class OffboardResponse(BaseModel):
+    model_config = ConfigDict(from_attributes=True)
+
+    user_id: UUID
+    status: str
+    offboarded_at: datetime | None

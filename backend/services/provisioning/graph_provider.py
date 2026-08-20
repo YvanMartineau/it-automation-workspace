@@ -21,5 +21,5 @@ class GraphProvisioningService(UserProvisioningService):
     async def set_password(self, user: ProvisionedUser, password: str) -> None:
         raise NotImplementedError("GraphProvisioningService is not implemented yet.")
 
-    async def deactivate_user(self, user_id: UUID) -> None:
+    async def deactivate_user(self, user_id: UUID) -> ProvisionedUser:
         raise NotImplementedError("GraphProvisioningService is not implemented yet.")

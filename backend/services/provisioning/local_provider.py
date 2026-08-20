@@ -65,12 +65,26 @@ class LocalDBProvisioningService(UserProvisioningService):
             user.user_id,
         )
 
-    async def deactivate_user(self, user_id: UUID) -> None:
+    async def deactivate_user(self, user_id: UUID) -> ProvisionedUser:
         result = await self.db.execute(select(OnboardedUser).where(OnboardedUser.id == user_id))
         record = result.scalar_one_or_none()
         if record is None:
             raise NotFoundError(f"No onboarded user with id '{user_id}'")
 
-        record.status = OnboardedUserStatus.OFFBOARDED
-        record.offboarded_at = datetime.now(timezone.utc)
-        await self.db.flush()
+        if record.status != OnboardedUserStatus.OFFBOARDED:
+            record.status = OnboardedUserStatus.OFFBOARDED
+            record.offboarded_at = datetime.now(timezone.utc)
+            await self.db.flush()
+
+        return ProvisionedUser(
+            user_id=record.id,
+            external_id=None,
+            first_name=record.first_name,
+            last_name=record.last_name,
+            email=record.email,
+            department=record.department,
+            job_title=record.job_title,
+            status=record.status.value,
+            provisioning_source=record.provisioning_source.value,
+            offboarded_at=record.offboarded_at,
+        )

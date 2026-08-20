@@ -7,10 +7,11 @@ itself doesn't know or care which provider is active.
 from fastapi import APIRouter, BackgroundTasks, Depends, HTTPException, status
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from core.exceptions import ConflictError
+from uuid import UUID
+from core.exceptions import ConflictError, NotFoundError
 from db.engine import get_db
 from models.user import User
-from schemas.onboard import OnboardRequest, OnboardResponse
+from schemas.onboard import OnboardRequest, OnboardResponse, OffboardResponse
 from security.jwt_handler import get_admin_user
 from middleware.audit_middleware import write_audit_log
 from services.n8n_client import trigger_onboarding_workflow
@@ -93,4 +94,43 @@ async def onboard_user(
         status=provisioned.status,
         provisioning_source=provisioned.provisioning_source,
         temporary_password=temporary_password,
+    )
+
+
+# TODO: @limiter.limit("10/minute") — same pending rate_limiter.py wiring as /onboard
+@router.post(
+    "/{user_id}/offboard",
+    response_model=OffboardResponse,
+    summary="Offboard a user",
+    description=(
+        "Revokes directory access for a previously onboarded user — soft-delete "
+        "(status flip), never a hard delete. Idempotent: re-calling on an "
+        "already-offboarded user is a no-op that returns the original record."
+    ),
+)
+async def offboard_user(
+    user_id: UUID,
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(get_admin_user),
+    provisioning: UserProvisioningService = Depends(get_provisioning_service),
+) -> OffboardResponse:
+    try:
+        deactivated = await provisioning.deactivate_user(user_id)
+    except NotFoundError as err:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=str(err)) from err
+
+    await write_audit_log(
+        db,
+        actor=current_user.email,
+        action="user.offboard",
+        target_type="onboarded_user",
+        target_id=str(user_id),
+        payload={"department": deactivated.department, "provisioning_source": deactivated.provisioning_source},
+    )
+    await db.commit()
+
+    return OffboardResponse(
+        user_id=deactivated.user_id,
+        status=deactivated.status,
+        offboarded_at=deactivated.offboarded_at,
     )
