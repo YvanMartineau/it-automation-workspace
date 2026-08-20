@@ -1,4 +1,4 @@
-// src/types/onboard.ts (Snippet to add)
+// src/types/onboard.ts (Snippet to add) //USELESS WAS REPLACE BY onboarding.ts
 export type OnboardingSource = 'local_db' | 'entra_id';
 export type OnboardingStatus = 'PENDING' | 'AD_CREATING' | 'EMAIL_SENDING' | 'JIRA_CREATING' | 'COMPLETED' | 'FAILED';
 

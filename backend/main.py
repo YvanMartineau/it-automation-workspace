@@ -50,9 +50,9 @@ def create_app() -> FastAPI:
     app.include_router(devices.router, prefix="/devices", tags=["devices"])
     app.include_router(scan.router)
     app.include_router(onboard.router)
+    app.include_router(reports.router)
     app.include_router(audit.router, prefix="/audit-logs", tags=["audit"])
-    app.include_router(reports.router, prefix="/reports", tags=["reports"])
-
+    
     @app.get("/health", tags=["health"])
     async def health_check():
         return {"status": "ok", "env": settings.APP_ENV}

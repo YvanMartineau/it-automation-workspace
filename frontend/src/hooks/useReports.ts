@@ -1,26 +1,26 @@
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { api } from "#/lib/api";
-import { mockReportApi } from "#/lib/mockApi";
 import { Report, GenerateReportInput } from "#/types/report";
 import { toast } from "sonner";
 
-// Set to false when FastAPI backend endpoint is ready
-const USE_MOCK = true;
+export interface ReportQueryParams {
+  type?: string;
+  search?: string;
+}
 
-export function useReports(filters?: { type?: string; search?: string }) {
+export function useReports(filters?: ReportQueryParams) {
   return useQuery({
     queryKey: ["reports", filters],
     queryFn: async () => {
-      if (USE_MOCK) {
-        return mockReportApi.getReports(filters);
-      }
-      const response = await api.get<{ data: Report[] }>("/reports", { params: filters });
+      const response = await api.get<{ data: Report[] }>("/reports", {
+        params: filters,
+      });
       return response.data.data;
     },
-    staleTime: 5 * 60 * 1000,
-    gcTime: 10 * 60 * 1000,
+    staleTime: 5 * 60 * 1000, // 5 minutes (prevents excessive DB hits on Aiven)
+    gcTime: 10 * 60 * 1000,    // 10 minutes
     refetchOnWindowFocus: false,
-    // Poll every 3s to refresh status if any report is in "processing" state
+    // Automatically poll every 3 seconds if any report is in "processing" state
     refetchInterval: (query) => {
       const hasProcessing = query.state.data?.some((r) => r.status === "processing");
       return hasProcessing ? 3000 : false;
@@ -33,9 +33,6 @@ export function useGenerateReport() {
 
   return useMutation({
     mutationFn: async (payload: GenerateReportInput) => {
-      if (USE_MOCK) {
-        return mockReportApi.generateReport(payload);
-      }
       const response = await api.post<{ data: Report }>("/reports/generate", payload);
       return response.data.data;
     },
