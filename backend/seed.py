@@ -72,12 +72,12 @@ def seed_ldap_structure() -> None:
 async def _seed_users(db) -> dict[str, User]:
     seed_data = [
         {
-            "email": os.getenv("SEED_ADMIN_EMAIL", "admin@demo.local"),
+            "email": os.getenv("SEED_ADMIN_EMAIL", "admin@dev.de"),
             "password": os.getenv("SEED_ADMIN_PASSWORD"),
             "role": "admin",
         },
         {
-            "email": os.getenv("SEED_VIEWER_EMAIL", "viewer@demo.local"),
+            "email": os.getenv("SEED_VIEWER_EMAIL", "viewer@dev.de"),
             "password": os.getenv("SEED_VIEWER_PASSWORD"),
             "role": "viewer",
         },
@@ -126,8 +126,8 @@ async def main():
 
     elapsed = time.perf_counter() - start
     print(f"\nSeed complete in {elapsed:.2f}s.")
-    print("  admin@demo.local (password from SEED_ADMIN_PASSWORD)")
-    print("  viewer@demo.local (password from SEED_VIEWER_PASSWORD)")
+    print("  admin@dev.de (password from SEED_ADMIN_PASSWORD)")
+    print("  viewer@dev.de (password from SEED_VIEWER_PASSWORD)")
 
     if elapsed > 90:
         print("WARNING: seed exceeded the 90s target.")

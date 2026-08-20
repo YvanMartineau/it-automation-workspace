@@ -1,0 +1,115 @@
+{
+  "name": "My workflow",
+  "nodes": [
+    {
+      "parameters": {
+        "httpMethod": "POST",
+        "path": "onboarding",
+        "options": {}
+      },
+      "type": "n8n-nodes-base.webhook",
+      "typeVersion": 2.1,
+      "position": [
+        -352,
+        0
+      ],
+      "id": "136f7cc5-7ca8-41db-8b0c-6b1e2502e10f",
+      "name": "Webhook",
+      "webhookId": "2d9470f1-c4e4-42e6-98c6-454535f4ebae"
+    },
+    {
+      "parameters": {
+        "sendTo": "={{ $json.email }}",
+        "subject": "=Welcome on Board {{ $json.first_name }}",
+        "message": "=Hi {{$json.first_name}},  Welcome to the team! Your account has been created.  Department: {{$json.department}} Role: {{$json.job_title}}  Your temporary password: {{$json.temporary_password}}  Please log in and Note that this password is one time used, on next Login You would be required to enter a new password.  Best, IT Team",
+        "options": {}
+      },
+      "type": "n8n-nodes-base.gmail",
+      "typeVersion": 2.2,
+      "position": [
+        64,
+        96
+      ],
+      "id": "c11c77c4-cbe7-446c-b932-4538c12ba321",
+      "name": "Send a message",
+      "webhookId": "9c541818-1cec-4cef-ae95-f00362dd5da5",
+      "retryOnFail": true,
+      "credentials": {
+        "gmailOAuth2": {
+          "id": "ZUe17z3icpfxWzOC",
+          "name": "Gmail account"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "project": {
+          "__rl": true,
+          "value": "10001",
+          "mode": "list",
+          "cachedResultName": "Support"
+        },
+        "issueType": {
+          "__rl": true,
+          "value": "10011",
+          "mode": "list",
+          "cachedResultName": "Task"
+        },
+        "summary": "=IT Onboarding: {{ $json.first_name }} {{ $json.last_name }}\nDescription: pull in {{ $json.department }} as {{ $json.job_title }}",
+        "additionalFields": {}
+      },
+      "type": "n8n-nodes-base.jira",
+      "typeVersion": 1,
+      "position": [
+        64,
+        -112
+      ],
+      "id": "9f873104-3ea3-4b12-b441-38f13f588975",
+      "name": "Create an issue",
+      "retryOnFail": true,
+      "credentials": {
+        "jiraSoftwareCloudApi": {
+          "id": "hya1AwbuC1AJ6BrE",
+          "name": "Jira SW Cloud account"
+        }
+      }
+    }
+  ],
+  "pinData": {},
+  "connections": {
+    "Webhook": {
+      "main": [
+        [
+          {
+            "node": "Send a message",
+            "type": "main",
+            "index": 0
+          },
+          {
+            "node": "Create an issue",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Send a message": {
+      "main": [
+        []
+      ]
+    }
+  },
+  "active": false,
+  "settings": {
+    "executionOrder": "v1",
+    "binaryMode": "separate"
+  },
+  "versionId": "eafddc9a-ad98-4934-9e8a-71764e5e48d3",
+  "meta": {
+    "templateCredsSetupCompleted": true,
+    "instanceId": "f4c78235372d488c84a15e560d411ab21f3fdf40298fdf6d552b6981d85d39a8"
+  },
+  "nodeGroups": [],
+  "id": "5N51ClTnQ8BltNG8",
+  "tags": []
+}

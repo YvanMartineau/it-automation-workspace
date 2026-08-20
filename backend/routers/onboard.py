@@ -80,6 +80,7 @@ async def onboard_user(
             "last_name": provisioned.last_name,
             "department": provisioned.department,
             "job_title": provisioned.job_title,
+            "temporary_password": temporary_password,
         },
     )
 
