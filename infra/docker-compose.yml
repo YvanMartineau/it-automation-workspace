@@ -81,6 +81,7 @@ services:
       - N8N_HOST=localhost
       - N8N_PORT=5678
       - N8N_WEBHOOK_URL=http://localhost:5678
+      - N8N_CALLBACK_SECRET=${N8N_CALLBACK_SECRET}
     restart: unless-stopped
     mem_limit: 2g   # CRITICAL — without this n8n can OOM-kill FastAPI
 

@@ -7,6 +7,7 @@ from sqlalchemy import select
 
 from db.engine import get_db, AsyncSessionLocal
 from models.report_log import ReportLog
+from models.user import User # Ensure User model is imported for proper typing
 from schemas.report import ReportTriggerRequest, ReportJobResponse, ReportRead
 from security.jwt_handler import get_current_user, get_admin_user
 from services.report_service import generate_manual_report_task, REPORT_JOBS
@@ -24,10 +25,17 @@ router = APIRouter(prefix="/reports", tags=["Reports"])
 async def trigger_report(
     payload: ReportTriggerRequest,
     background_tasks: BackgroundTasks,
-    current_user: dict = Depends(get_admin_user),
+    # FIXED: Type hint is User, not dict
+    current_user: User = Depends(get_admin_user), 
 ):
     job_id = uuid.uuid4()
-    actor = get_current_user
+    
+    # 1. THE ACTOR FIX: Use the human email for the audit log
+    actor_email = current_user.email 
+
+    # 2. THE SCHEMA FIX: Generate the missing required fields
+    # e.g., "overview" becomes "Manual Overview Report"
+    dynamic_report_name = f"Manual {payload.report_type.replace('_', ' ').title()} Report"
 
     # Initialize job state
     REPORT_JOBS[job_id] = {"status": "queued"}
@@ -35,8 +43,10 @@ async def trigger_report(
     background_tasks.add_task(
         generate_manual_report_task,
         job_id=job_id,
+        report_name=dynamic_report_name,
         report_type=payload.report_type,
-        actor=actor,
+        actor=actor_email,                      # fixed identifier
+        recipient_email=actor_email,  # Now safely passing a string instead of a function
         db_factory=AsyncSessionLocal,
         start_date=payload.start_date,
         end_date=payload.end_date,
@@ -52,7 +62,7 @@ async def trigger_report(
 )
 async def get_report_status(
     job_id: uuid.UUID,
-    current_user: dict = Depends(get_admin_user),
+    current_user: User = Depends(get_admin_user),
 ):
     job = REPORT_JOBS.get(job_id)
     if not job:
@@ -73,7 +83,7 @@ async def get_report_status(
 )
 async def download_report(
     job_id: uuid.UUID,
-    current_user: dict = Depends(get_admin_user),
+    current_user: User = Depends(get_admin_user),
 ):
     job = REPORT_JOBS.get(job_id)
     if not job:
@@ -100,7 +110,8 @@ async def download_report(
     summary="Fetch scheduled report history",
 )
 async def get_report_history(
-    current_user: dict = Depends(get_current_user),
+    # FIXED: Type hint is User, not dict
+    current_user: User = Depends(get_current_user),
     db: AsyncSession = Depends(get_db),
 ):
     stmt = select(ReportLog).order_by(ReportLog.sent_at.desc()).limit(50)

@@ -67,7 +67,7 @@ export const ReportsPage: React.FC = () => {
                     <TableCell className="font-medium">{item.report_name}</TableCell>
                     <TableCell className="capitalize">{item.report_type}</TableCell>
                     <TableCell>{item.triggered_by}</TableCell>
-                    <TableCell className="text-xs text-muted-foreground">{item.recipient_emails}</TableCell>
+                    <TableCell className="text-xs text-muted-foreground">{item.recipient_email}</TableCell>
                     <TableCell className="tabular-nums">
                       <span className="flex items-center gap-1.5">
                         <Clock className="h-3.5 w-3.5 text-muted-foreground" />

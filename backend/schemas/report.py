@@ -35,7 +35,7 @@ class ReportRead(BaseModel):
     report_name: str
     report_type: str
     triggered_by: str
-    recipient_emails: str
+    recipient_email: str
     status: str
     sent_at: datetime
     error_message: Optional[str] = None

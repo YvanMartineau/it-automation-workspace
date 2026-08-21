@@ -57,10 +57,9 @@ class LdapProvisioningService(UserProvisioningService):
 
     # ---- sync implementations, always called via run_in_executor ----
 
-    def _create_user_sync(self, first_name, last_name, email, department, job_title) -> ProvisionedUser:
+    def _create_user_sync(self, user_id: UUID, first_name, last_name, email, department, job_title) -> ProvisionedUser:
         uid = email.split("@")[0]
         user_dn = f"uid={uid},{settings.LDAP_USERS_OU}"
-        internal_id = uuid4()
 
         conn = self._connect()
         try:
@@ -74,7 +73,7 @@ class LdapProvisioningService(UserProvisioningService):
                     "mail": email,
                     "title": job_title,
                     "departmentNumber": department,
-                    "employeeNumber": str(internal_id),  # lets us look the DN back up by our own UUID later
+                    "employeeNumber": str(user_id),   # was internal_id
                     "description": "active",
                 },
             )
@@ -86,7 +85,7 @@ class LdapProvisioningService(UserProvisioningService):
             self._ensure_group_membership_sync(conn, department, user_dn)
 
             return ProvisionedUser(
-                user_id=internal_id,
+                user_id=user_id,   # was internal_id
                 external_id=user_dn,
                 first_name=first_name,
                 last_name=last_name,
@@ -163,15 +162,15 @@ class LdapProvisioningService(UserProvisioningService):
             conn.unbind()
             
     # ---- async interface ----
-
-    async def create_user(self, *, first_name, last_name, email, department, job_title) -> ProvisionedUser:
+    async def create_user(self, *, user_id: UUID, first_name, last_name, email, department, job_title) -> ProvisionedUser:
         loop = asyncio.get_running_loop()
         try:
             return await loop.run_in_executor(
-                None, self._create_user_sync, first_name, last_name, email, department, job_title
+                None, self._create_user_sync, user_id, first_name, last_name, email, department, job_title
             )
         except LDAPException as err:
             raise ExternalServiceError(f"LDAP operation failed: {err}") from err
+
 
     async def set_password(self, user: ProvisionedUser, password: str) -> None:
         loop = asyncio.get_running_loop()

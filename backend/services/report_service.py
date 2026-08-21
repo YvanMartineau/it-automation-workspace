@@ -1,6 +1,6 @@
 import logging
 import uuid
-from datetime import datetime
+from datetime import datetime, timezone
 from typing import Callable, Optional
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy import select, func
@@ -77,8 +77,10 @@ async def _gather_report_metrics(
 
 async def generate_manual_report_task(
     job_id: uuid.UUID,
+    report_name: str,             # Added parameter
     report_type: str,
     actor: str,
+    recipient_email: str,        # Added parameter
     db_factory: Callable[[], AsyncSession],
     start_date: Optional[datetime] = None,
     end_date: Optional[datetime] = None,
@@ -98,16 +100,52 @@ async def generate_manual_report_task(
             REPORT_JOBS[job_id]["status"] = "completed"
             REPORT_JOBS[job_id]["pdf_bytes"] = pdf_bytes
             
-            # 4. Audit Log
-            await write_audit_log(
-                db=db, actor=actor, action="report.generate_manual", target_type="report",
-                target_id=str(job_id), payload={"report_type": report_type}
+            # 4. Store in Report Table (History)
+            report_record = ReportLog(
+                id=job_id,
+                report_name=report_name,
+                report_type=report_type,
+                triggered_by=actor,
+                recipient_email=recipient_email,
+                status="SENT",
+                sent_at=datetime.now(timezone.utc)
             )
+            db.add(report_record)
+            
+            # 5. Audit Log
+            await write_audit_log(
+                db=db, 
+                actor=actor, 
+                action="report.generate_manual", 
+                target_type="report",
+                target_id=str(job_id), 
+                payload={"report_type": report_type}
+            )
+            
+            # CRITICAL: Commit the transaction to save both the log and audit entries
+            await db.commit()
             
         except Exception as exc:
             logger.error(f"Manual report generation failed for {job_id}: {exc}", exc_info=True)
-            REPORT_JOBS[job_id]["status"] = "failed"
+            REPORT_JOBS[job_id]["status"] = "FAILED"
             REPORT_JOBS[job_id]["error_message"] = str(exc)
+            
+            # Attempt to record the failure in the database history
+            try:
+                failed_record = ReportLog(
+                    id=job_id,
+                    report_name=report_name,
+                    report_type=report_type,
+                    triggered_by=actor,
+                    recipient_email=recipient_email,
+                    status="FAILED",
+                    sent_at=datetime.now(timezone.utc),
+                    error_message=str(exc)
+                )
+                db.add(failed_record)
+                await db.commit()
+            except Exception as inner_exc:
+                logger.error(f"Failed to record failed report state to DB: {inner_exc}")
 
 
 async def generate_and_send_report_task(

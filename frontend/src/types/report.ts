@@ -22,7 +22,7 @@ export interface ReportRead {
   report_name: string;
   report_type: string;
   triggered_by: string;
-  recipient_emails: string;
+  recipient_email: string;
   status: string;
   sent_at: string;
   error_message?: string | null;
