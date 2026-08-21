@@ -3,7 +3,7 @@ import io
 import logging
 from datetime import datetime, timezone
 from typing import Any, Dict
-
+import os
 import matplotlib
 matplotlib.use("Agg")  # Non-GUI backend for server environments
 import matplotlib.pyplot as plt
@@ -12,8 +12,10 @@ from weasyprint import HTML
 
 logger = logging.getLogger(__name__)
 
+# Dynamically resolve the template directory
+TEMPLATE_DIR = os.path.abspath(os.path.join(os.path.dirname(__file__), "..", "templates"))
 env = Environment(
-    loader=FileSystemLoader("templates"),
+    loader=FileSystemLoader(TEMPLATE_DIR),
     autoescape=select_autoescape(["html", "xml"]),
 )
 
@@ -52,7 +54,8 @@ def _generate_cpu_load_bar_svg(top_cpu_devices: list) -> str:
     if not top_cpu_devices:
         hostnames, cpu_loads = ["No Data"], [0]
     else:
-        hostnames = [d.hostname or d.ip_address for d in top_cpu_devices[:5]]
+        # Fallback to ip_address if hostname is None/missing
+        hostnames = [getattr(d, "hostname", None) or d.ip_address for d in top_cpu_devices[:5]]
         cpu_loads = [d.cpu_percent or 0.0 for d in top_cpu_devices[:5]]
 
     fig, ax = plt.subplots(figsize=(4.5, 2.5))
@@ -102,28 +105,24 @@ async def generate_report_pdf(context: Dict[str, Any]) -> bytes:
     )
 
     now = datetime.now(timezone.utc)
+    total = context.get("total_devices", 0)
+    online = context.get("online_devices", 0)
+    availability_pct = round((online / total) * 100, 2) if total > 0 else 0.0
+
+    # 2. Enrich context while preserving all original metrics (like onboarded_users, start_date, etc.)
     enriched_context = {
+        **context,
         "generated_at": now.strftime("%Y-%m-%d %H:%M:%S UTC"),
-        "report_type": context.get("report_type", "manual").upper(),
-        "total_devices": context.get("total_devices", 0),
-        "online_devices": context.get("online_devices", 0),
-        "offline_devices": context.get("offline_devices", []),
-        "offline_count": len(context.get("offline_devices", [])),
-        "availability_pct": (
-            round((context.get("online_devices", 0) / context["total_devices"]) * 100, 2)
-            if context.get("total_devices", 0) > 0 else 0.0
-        ),
-        "top_cpu_devices": context.get("top_cpu_devices", []),
-        "avg_latency_ms": context.get("avg_latency_ms", 0.0),
-        "total_audit_events_24h": context.get("total_audit_events_24h", 0),
+        "availability_pct": availability_pct,
         "donut_chart_svg": donut_chart_svg,
         "bar_chart_svg": bar_chart_svg,
     }
 
+    # 3. Render HTML
     template = env.get_template("report.html")
     html_content = template.render(**enriched_context)
 
-    # 2. Render WeasyPrint PDF
+    # 4. Render WeasyPrint PDF
     pdf_bytes = await loop.run_in_executor(
         None, lambda: HTML(string=html_content).write_pdf()
     )

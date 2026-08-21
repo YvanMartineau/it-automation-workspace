@@ -1,121 +1,155 @@
 <!DOCTYPE html>
-<html lang="en">
+<html>
 <head>
-    <meta charset="UTF-8">
-    <title>Infrastructure Report</title>
-    <style>
-        body { font-family: 'Helvetica Neue', Helvetica, Arial, sans-serif; color: #333; line-height: 1.6; margin: 40px; }
-        .header { border-bottom: 2px solid #2c3e50; padding-bottom: 10px; margin-bottom: 30px; }
-        .header h1 { color: #2c3e50; margin: 0; text-transform: uppercase; font-size: 24px; }
-        .header p { margin: 5px 0 0 0; color: #7f8c8d; font-size: 14px; }
-        .metric-cards { display: table; width: 100%; margin-bottom: 30px; }
-        .card { display: table-cell; width: 33%; padding: 15px; background: #ecf0f1; border-radius: 5px; text-align: center; border: 1px solid #bdc3c7; }
-        .card h3 { margin: 0 0 10px 0; font-size: 14px; color: #7f8c8d; text-transform: uppercase; }
-        .card .value { font-size: 28px; font-weight: bold; color: #2980b9; }
-        table { width: 100%; border-collapse: collapse; margin-top: 20px; }
-        th, td { padding: 12px; text-align: left; border-bottom: 1px solid #ddd; }
-        th { background-color: #2c3e50; color: white; }
-        .footer { margin-top: 50px; font-size: 12px; color: #95a5a6; text-align: center; border-top: 1px solid #eee; padding-top: 10px; }
-    </style>
+  <style>
+    @page { size: A4; margin: 15mm; }
+    body { font-family: 'Helvetica Neue', Helvetica, Arial, sans-serif; color: #1f2937; line-height: 1.4; }
+    .header { border-bottom: 2px solid #2563eb; padding-bottom: 10px; margin-bottom: 15px; }
+    .header h1 { font-size: 18pt; margin: 0; color: #1e3a8a; text-transform: uppercase; }
+    .header p { margin: 2px 0 0 0; color: #6b7280; font-size: 8pt; }
+    .metric-grid { display: table; width: 100%; margin-bottom: 15px; }
+    .metric-card { display: table-cell; background: #f8fafc; border: 1px solid #e2e8f0; padding: 12px; border-radius: 4px; text-align: center; }
+    .metric-spacer { display: table-cell; width: 10px; } /* Creates gap between cards */
+    .metric-value { font-size: 14pt; font-weight: bold; color: #0f172a; }
+    .metric-label { font-size: 7pt; text-transform: uppercase; color: #64748b; margin-top: 2px; }
+    
+    .charts-container { display: table; width: 100%; margin-bottom: 15px; }
+    .chart-box { display: table-cell; width: 50%; vertical-align: middle; text-align: center; }
+    
+    h3 { font-size: 12pt; color: #1e3a8a; border-bottom: 1px solid #e2e8f0; padding-bottom: 4px; margin-bottom: 8px;}
+    table { width: 100%; border-collapse: collapse; margin-bottom: 20px; font-size: 8pt; }
+    th { background: #f1f5f9; text-align: left; padding: 6px 8px; font-weight: 600; border-bottom: 1px solid #cbd5e1; }
+    td { padding: 6px 8px; border-bottom: 1px solid #e2e8f0; }
+    .badge-offline { background: #fee2e2; color: #991b1b; padding: 2px 6px; border-radius: 4px; font-size: 7pt; font-weight: bold; }
+    .badge-online { background: #d1fae5; color: #065f46; padding: 2px 6px; border-radius: 4px; font-size: 7pt; font-weight: bold; }
+    .footer { font-size: 7pt; color: #9ca3af; text-align: center; margin-top: 20px; border-top: 1px solid #e5e7eb; padding-top: 8px; }
+  </style>
 </head>
 <body>
+  
+  <!-- DYNAMIC HEADER -->
+  <div class="header">
+    <h1>
+      {% if report_type == 'overview' %} Executive Overview
+      {% elif report_type == 'asset_inventory' %} Asset Inventory
+      {% elif report_type == 'device_health' %} Device Health Report
+      {% elif report_type == 'onboarding_summary' %} Onboarding Summary
+      {% elif report_type == 'compliance_audit' %} Compliance Audit
+      {% else %} System Status Report {% endif %}
+    </h1>
+    <p>Period: {{ start_date }} to {{ end_date }} | Generated: {{ generated_at }}</p>
+  </div>
 
-    <div class="header">
-        <h1>
-            {% if report_type == 'overview' %} Executive Overview
-            {% elif report_type == 'asset_inventory' %} Asset Inventory
-            {% elif report_type == 'device_health' %} Device Health Report
-            {% elif report_type == 'onboarding_summary' %} Onboarding Summary
-            {% elif report_type == 'compliance_audit' %} Compliance Audit
-            {% else %} Infrastructure Report {% endif %}
-        </h1>
-        <p>Reporting Period: {{ start_date }} to {{ end_date }}</p>
+  <!-- DYNAMIC METRICS GRID -->
+  <div class="metric-grid">
+    <div class="metric-card">
+      <div class="metric-value">{{ total_devices }}</div>
+      <div class="metric-label">Managed Hosts</div>
     </div>
-
-    <!-- OVERVIEW OR ASSET INVENTORY -->
-    {% if report_type in ['overview', 'asset_inventory'] %}
-    <div class="metric-cards">
-        <div class="card">
-            <h3>Total Devices</h3>
-            <div class="value">{{ total_devices }}</div>
-        </div>
-        <div class="card">
-            <h3>Online</h3>
-            <div class="value" style="color: #27ae60;">{{ online_devices }}</div>
-        </div>
-        <div class="card">
-            <h3>Offline</h3>
-            <div class="value" style="color: #e74c3c;">{{ offline_devices|length }}</div>
-        </div>
-    </div>
-    {% endif %}
-
-    <!-- ASSET INVENTORY SPECIFIC -->
-    {% if report_type == 'asset_inventory' and offline_devices %}
-    <h2>Offline Devices Attention Required</h2>
-    <table>
-        <tr>
-            <th>Device ID / Name</th>
-            <th>Last Known IP</th>
-            <th>Status</th>
-        </tr>
-        {% for device in offline_devices %}
-        <tr>
-            <td>{{ device.id }}</td>
-            <td>{{ device.ip_address }}</td>
-            <td style="color: #e74c3c;">Offline</td>
-        </tr>
-        {% endfor %}
-    </table>
-    {% endif %}
-
-    <!-- DEVICE HEALTH SPECIFIC -->
-    {% if report_type in ['overview', 'device_health'] %}
-    <h2>System Health & Performance</h2>
-    <p><strong>Average Network Latency (Online Devices):</strong> {{ avg_latency_ms }} ms</p>
     
-    <h3>Top 5 High CPU Utilization Devices</h3>
-    <table>
-        <tr>
-            <th>Device IP</th>
-            <th>CPU Usage</th>
-            <th>Memory Usage</th>
-        </tr>
-        {% for device in top_cpu_devices %}
-        <tr>
-            <td>{{ device.ip_address }}</td>
-            <td>{{ device.cpu_percent }}%</td>
-            <td>{{ device.memory_percent }}%</td>
-        </tr>
-        {% else %}
-        <tr><td colspan="3">No CPU data available.</td></tr>
-        {% endfor %}
-    </table>
+    {% if report_type in ['overview', 'asset_inventory', 'device_health'] %}
+    <div class="metric-spacer"></div>
+    <div class="metric-card">
+      <div class="metric-value">{{ availability_pct }}%</div>
+      <div class="metric-label">Fleet Availability</div>
+    </div>
     {% endif %}
 
-    <!-- ONBOARDING SUMMARY -->
+    {% if report_type in ['overview', 'device_health'] %}
+    <div class="metric-spacer"></div>
+    <div class="metric-card">
+      <div class="metric-value">{{ avg_latency_ms }} ms</div>
+      <div class="metric-label">Avg Network Latency</div>
+    </div>
+    {% endif %}
+
     {% if report_type in ['overview', 'onboarding_summary'] %}
-    <div class="metric-cards" style="margin-top: 20px;">
-        <div class="card">
-            <h3>Total Users Onboarded</h3>
-            <div class="value">{{ total_onboarded_users }}</div>
-        </div>
+    <div class="metric-spacer"></div>
+    <div class="metric-card">
+      <div class="metric-value">{{ total_onboarded_users }}</div>
+      <div class="metric-label">Users Onboarded</div>
     </div>
     {% endif %}
 
-    <!-- COMPLIANCE AUDIT -->
     {% if report_type in ['overview', 'compliance_audit'] %}
-    <div class="metric-cards" style="margin-top: 20px;">
-        <div class="card">
-            <h3>Total Audit Events</h3>
-            <div class="value">{{ total_audit_events_24h }}</div>
-        </div>
+    <div class="metric-spacer"></div>
+    <div class="metric-card">
+      <div class="metric-value">{{ total_audit_events_24h }}</div>
+      <div class="metric-label">Audit Events</div>
     </div>
     {% endif %}
+  </div>
 
-    <div class="footer">
-        Generated automatically by the IT Automation Engine on {{ end_date }}.
+  <!-- CHARTS (Shown mostly for overview and health) -->
+  {% if report_type in ['overview', 'device_health', 'asset_inventory'] %}
+  <div class="charts-container">
+    <div class="chart-box">
+      {{ donut_chart_svg | safe }}
     </div>
+    {% if report_type in ['overview', 'device_health'] %}
+    <div class="chart-box">
+      {{ bar_chart_svg | safe }}
+    </div>
+    {% endif %}
+  </div>
+  {% endif %}
 
+  <!-- ASSET INVENTORY / OFFLINE SYSTEMS -->
+  {% if report_type in ['overview', 'asset_inventory'] %}
+  <h3>Offline Systems Alert Ledger</h3>
+  <table>
+    <thead>
+      <tr>
+        <th>IP Address</th>
+        <th>Hostname</th>
+        <th>Status</th>
+        <th>Last Seen</th>
+      </tr>
+    </thead>
+    <tbody>
+      {% for device in offline_devices %}
+      <tr>
+        <td>{{ device.ip_address }}</td>
+        <td>{{ device.hostname or 'Unresolved' }}</td>
+        <td><span class="badge-offline">OFFLINE</span></td>
+        <td>{{ device.last_seen or 'Never' }}</td>
+      </tr>
+      {% else %}
+      <tr><td colspan="4">All systems operating within nominal parameters (100% online).</td></tr>
+      {% endfor %}
+    </tbody>
+  </table>
+  {% endif %}
+
+  <!-- DEVICE HEALTH / CPU USAGE -->
+  {% if report_type in ['overview', 'device_health'] %}
+  <h3>Top 5 Compute Consumers</h3>
+  <table>
+    <thead>
+      <tr>
+        <th>IP Address</th>
+        <th>Hostname</th>
+        <th>CPU Usage</th>
+        <th>Memory Usage</th>
+      </tr>
+    </thead>
+    <tbody>
+      {% for device in top_cpu_devices %}
+      <tr>
+        <td>{{ device.ip_address }}</td>
+        <td>{{ device.hostname or 'Unresolved' }}</td>
+        <td>{{ device.cpu_percent }}%</td>
+        <td>{{ device.memory_percent }}%</td>
+      </tr>
+      {% else %}
+      <tr><td colspan="4">No active compute data available.</td></tr>
+      {% endfor %}
+    </tbody>
+  </table>
+  {% endif %}
+
+  <div class="footer">
+    GDPR Compliant System Audit Log • EU Infrastructure Region • Automated System Report
+  </div>
 </body>
 </html>
