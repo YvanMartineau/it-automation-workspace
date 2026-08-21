@@ -6,6 +6,7 @@ and router registration. All business logic lives in routers/.
 from contextlib import asynccontextmanager
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
+import logging
 from slowapi import _rate_limit_exceeded_handler
 from slowapi.errors import RateLimitExceeded
 from core.exceptions import setup_exception_handlers
@@ -16,6 +17,12 @@ from services.scheduler import start_scheduler, stop_scheduler
 from routers import auth, devices, audit, scan, onboard, reports
 
 settings = get_settings()
+
+logger = logging.getLogger(__name__)
+
+# List of emails to receive the weekly report
+WEEKLY_RECIPIENTS = ["martineaubadou9@gmail.com", "tiafricanwilddog@gmail.com"]
+
 @asynccontextmanager
 
 async def lifespan(app: FastAPI):
