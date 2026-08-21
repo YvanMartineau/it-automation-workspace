@@ -21,7 +21,7 @@ settings = get_settings()
 logger = logging.getLogger(__name__)
 
 # List of emails to receive the weekly report
-WEEKLY_RECIPIENTS = ["martineaubadou9@gmail.com", "tiafricanwilddog@gmail.com"]
+WEEKLY_RECIPIENTS = "martineaubadou9@gmail.com"
 
 @asynccontextmanager
 

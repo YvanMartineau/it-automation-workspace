@@ -1,0 +1,87 @@
+<!DOCTYPE html>
+<html>
+<head>
+  <style>
+    @page { size: A4; margin: 15mm; }
+    body { font-family: 'Helvetica Neue', Helvetica, Arial, sans-serif; color: #1f2937; line-height: 1.4; }
+    .header { border-bottom: 2px solid #2563eb; padding-bottom: 10px; margin-bottom: 15px; }
+    .header h1 { font-size: 18pt; margin: 0; color: #1e3a8a; }
+    .header p { margin: 2px 0 0 0; color: #6b7280; font-size: 8pt; }
+    .metric-grid { display: table; width: 100%; margin-bottom: 15px; }
+    .metric-card { display: table-cell; width: 25%; background: #f8fafc; border: 1px solid #e2e8f0; padding: 8px; border-radius: 4px; text-align: center; }
+    .metric-value { font-size: 14pt; font-weight: bold; color: #0f172a; }
+    .metric-label { font-size: 7pt; text-transform: uppercase; color: #64748b; margin-top: 2px; }
+    
+    .charts-container { display: table; width: 100%; margin-bottom: 15px; }
+    .chart-box { display: table-cell; width: 50%; vertical-align: middle; text-align: center; }
+    
+    table { width: 100%; border-collapse: collapse; margin-top: 10px; margin-bottom: 15px; font-size: 8pt; }
+    th { background: #f1f5f9; text-align: left; padding: 6px 8px; font-weight: 600; border-bottom: 1px solid #cbd5e1; }
+    td { padding: 6px 8px; border-bottom: 1px solid #e2e8f0; }
+    .badge-offline { background: #fee2e2; color: #991b1b; padding: 2px 6px; border-radius: 4px; font-size: 7pt; font-weight: bold; }
+    .footer { font-size: 7pt; color: #9ca3af; text-align: center; margin-top: 20px; border-top: 1px solid #e5e7eb; padding-top: 8px; }
+  </style>
+</head>
+<body>
+  <div class="header">
+    <h1>System Status & Performance Report</h1>
+    <p>Report Type: {{ report_type }} | Generated: {{ generated_at }}</p>
+  </div>
+
+  <div class="metric-grid">
+    <div class="metric-card">
+      <div class="metric-value">{{ total_devices }}</div>
+      <div class="metric-label">Managed Hosts</div>
+    </div>
+    <div class="metric-card">
+      <div class="metric-value">{{ availability_pct }}%</div>
+      <div class="metric-label">Fleet Availability</div>
+    </div>
+    <div class="metric-card">
+      <div class="metric-value">{{ avg_latency_ms }} ms</div>
+      <div class="metric-label">Avg Network Latency</div>
+    </div>
+    <div class="metric-card">
+      <div class="metric-value">{{ total_audit_events_24h }}</div>
+      <div class="metric-label">24h Audit Events</div>
+    </div>
+  </div>
+
+  <div class="charts-container">
+    <div class="chart-box">
+      {{ donut_chart_svg | safe }}
+    </div>
+    <div class="chart-box">
+      {{ bar_chart_svg | safe }}
+    </div>
+  </div>
+
+  <h3>Offline Systems Alert Ledger</h3>
+  <table>
+    <thead>
+      <tr>
+        <th>IP Address</th>
+        <th>Hostname</th>
+        <th>Status</th>
+        <th>Last Seen</th>
+      </tr>
+    </thead>
+    <tbody>
+      {% for device in offline_devices %}
+      <tr>
+        <td>{{ device.ip_address }}</td>
+        <td>{{ device.hostname or 'Unresolved' }}</td>
+        <td><span class="badge-offline">OFFLINE</span></td>
+        <td>{{ device.last_seen or 'Never' }}</td>
+      </tr>
+      {% else %}
+      <tr><td colspan="4">All systems operating within nominal parameters (100% online).</td></tr>
+      {% endfor %}
+    </tbody>
+  </table>
+
+  <div class="footer">
+    GDPR Compliant System Audit Log • EU Infrastructure Region (Frankfurt) • Automated System Report
+  </div>
+</body>
+</html>

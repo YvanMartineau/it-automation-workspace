@@ -36,6 +36,7 @@ class OffboardResponse(BaseModel):
 class OnboardedUserListItem(BaseModel):
     model_config = ConfigDict(from_attributes=True)
     user_id: UUID = Field(validation_alias="id")
+    job_id: str | None
     external_id: str | None
     first_name: str
     last_name: str
@@ -43,9 +44,11 @@ class OnboardedUserListItem(BaseModel):
     department: str
     job_title: str
     status: str
-    job_status: str
+    job_status: str = Field(serialization_alias="workflow_status")
     provisioning_source: str
     requested_by: str | None
     error_message: str | None
     created_at: datetime
     offboarded_at: datetime | None
+
+"serialization_alias (not alias) is deliberate — it only changes the outbound JSON key, leaving the from_attributes lookup against the ORM object's actual job_status attribute untouched. If workflow_status isn't actually the exact name your frontend expects, tell me the real one and it's a one-word change."

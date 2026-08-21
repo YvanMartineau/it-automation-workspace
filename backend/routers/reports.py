@@ -27,7 +27,7 @@ async def trigger_report(
     current_user: dict = Depends(get_admin_user),
 ):
     job_id = uuid.uuid4()
-    actor = current_user.get("email", "admin")
+    actor = get_current_user
 
     # Initialize job state
     REPORT_JOBS[job_id] = {"status": "queued"}

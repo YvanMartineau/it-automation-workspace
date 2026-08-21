@@ -32,9 +32,7 @@ class ProvisionedUser:
 
 class UserProvisioningService(ABC):
     @abstractmethod
-    async def create_user(
-        self, *, first_name: str, last_name: str, email: str, department: str, job_title: str,
-    ) -> ProvisionedUser:
+    async def create_user(self, *, user_id: UUID, first_name: str, last_name: str, email: str, department: str, job_title: str) -> ProvisionedUser:
         """Raises ConflictError on duplicate email."""
 
     @abstractmethod

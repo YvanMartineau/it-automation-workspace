@@ -22,35 +22,18 @@ class LocalDBProvisioningService(UserProvisioningService):
     def __init__(self, db: AsyncSession):
         self.db = db
 
-    async def create_user(
-        self, *, first_name: str, last_name: str, email: str, department: str, job_title: str,
-    ) -> ProvisionedUser:
-        record = OnboardedUser(
-            first_name=first_name,
-            last_name=last_name,
-            email=email,
-            department=department,
-            job_title=job_title,
-            status=OnboardedUserStatus.ACTIVE,
-            provisioning_source=ProvisioningSource.LOCAL,
-        )
-        self.db.add(record)
-        try:
-            await self.db.flush()  # assigns record.id, surfaces IntegrityError before the router commits
-        except IntegrityError as err:
-            await self.db.rollback()
-            raise ConflictError(f"A user with email '{email}' already exists") from err
-
+    async def create_user(self, *, user_id, first_name, last_name, email, department, job_title) -> ProvisionedUser:
+        result = await self.db.execute(select(OnboardedUser).where(OnboardedUser.id == user_id))
+        record = result.scalar_one_or_none()
+        if record is None:
+            raise NotFoundError(f"No pending record for user_id '{user_id}' — the pipeline must insert it first")
+        record.first_name, record.last_name = first_name, last_name
+        record.email, record.department, record.job_title = email, department, job_title
+        await self.db.flush()
         return ProvisionedUser(
-            user_id=record.id,
-            external_id=None,
-            first_name=record.first_name,
-            last_name=record.last_name,
-            email=record.email,
-            department=record.department,
-            job_title=record.job_title,
-            status=record.status.value,
-            provisioning_source=record.provisioning_source.value,
+            user_id=record.id, external_id=None, first_name=record.first_name, last_name=record.last_name,
+            email=record.email, department=record.department, job_title=record.job_title,
+            status=record.status.value, provisioning_source=record.provisioning_source.value,
         )
 
     async def set_password(self, user: ProvisionedUser, password: str) -> None:

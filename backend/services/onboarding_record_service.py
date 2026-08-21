@@ -22,6 +22,9 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from models.onboarded_user import OnboardedUser, OnboardedUserStatus, OnboardJobStatus, ProvisioningSource
 from services.provisioning.base import ProvisionedUser
 
+from sqlalchemy.exc import IntegrityError
+from core.exceptions import ConflictError
+
 
 async def upsert_onboarding_record(
     db: AsyncSession, provisioned: ProvisionedUser, *, job_id: str, requested_by: str, job_status: OnboardJobStatus,
@@ -69,3 +72,22 @@ async def mark_offboarded(db: AsyncSession, user_id: UUID, offboarded_at: dateti
         record.status = OnboardedUserStatus.OFFBOARDED
         record.offboarded_at = offboarded_at
         await db.flush()
+
+
+async def create_pending_onboarding_record(
+    db: AsyncSession, *, user_id: UUID, job_id: str, requested_by: str,
+    first_name: str, last_name: str, email: str, department: str, job_title: str,
+    provisioning_source: ProvisioningSource,
+) -> OnboardedUser:
+    record = OnboardedUser(
+        id=user_id, job_id=job_id, requested_by=requested_by, job_status=OnboardJobStatus.PENDING,
+        first_name=first_name, last_name=last_name, email=email, department=department,
+        job_title=job_title, provisioning_source=provisioning_source,
+    )
+    db.add(record)
+    try:
+        await db.flush()
+    except IntegrityError as err:
+        await db.rollback()
+        raise ConflictError(f"A user with email '{email}' already exists") from err
+    return record

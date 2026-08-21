@@ -317,7 +317,7 @@ pydantic-core==2.20.1
     #   pydantic
 pydantic-settings==2.4.0
     # via -r backend/requirements.txt
-pydyf==0.12.1
+pydyf==0.10.0  #Downgraded due to incompatibility issues with weasy
     # via
     #   -r backend/requirements.txt
     #   weasyprint
