@@ -3,9 +3,10 @@ import { Card, CardContent, CardHeader, CardTitle } from "#/components/ui/card";
 import { Badge } from "#/components/ui/badge";
 import { Button } from "#/components/ui/button";
 import { CheckCircle2, Circle, XCircle, Loader2, Terminal } from "lucide-react";
-import type { OnboardingRecord, OnboardingWorkflowStatus } from "#/types/onboarding";
+import type { OnboardedUserListItem, OnboardingWorkflowStatus } from "#/types/onboarding";
 import { useRetryOnboarding } from "#/hooks/useOnboarding";
 import { useState } from "react";
+import { toast } from "sonner";
 
 const STEPS: { key: OnboardingWorkflowStatus; label: string }[] = [
   { key: "PENDING", label: "Ausstehend" },
@@ -24,17 +25,41 @@ const statusConfig: Record<OnboardingWorkflowStatus, { color: string; icon: Reac
   FAILED: { color: "bg-danger/10 text-danger", icon: <XCircle className="h-4 w-4" /> },
 };
 
+// Dynamically generate mock n8n logs based on current job status
+const generateSimulationLog = (record: OnboardedUserListItem): string[] => {
+  const logs: string[] = [];
+  const name = `${record.first_name} ${record.last_name}`;
+  
+  if (record.job_status !== "PENDING") {
+    logs.push(`POST https://n8n.instance.com/webhook/onboard-start\nPayload: { "first_name": "${record.first_name}", "email": "${record.email}", "department": "${record.department}" }`);
+  }
+  if (["AD_CREATING", "EMAIL_SENDING", "JIRA_CREATING", "COMPLETED"].includes(record.job_status)) {
+    logs.push(`POST https://n8n.instance.com/webhook/ad-create\nPayload: { "user": "${name}", "ou": "${record.department}", "source": "${record.provisioning_source}" }`);
+  }
+  if (["EMAIL_SENDING", "JIRA_CREATING", "COMPLETED"].includes(record.job_status)) {
+    logs.push(`POST https://n8n.instance.com/webhook/email-send\nPayload: { "to": "${record.email}", "template": "welcome" }`);
+  }
+  if (["JIRA_CREATING", "COMPLETED"].includes(record.job_status)) {
+    logs.push(`POST https://n8n.instance.com/webhook/jira-ticket\nPayload: { "summary": "IT Setup for ${name}", "priority": "High" }`);
+  }
+  if (record.job_status === "FAILED" && record.error_message) {
+    logs.push(`\n❌ ERROR: ${record.error_message}`);
+  }
+  
+  return logs;
+};
+
 interface OnboardingCardProps {
-  record: OnboardingRecord;
+  record: OnboardedUserListItem;
 }
 
 export function OnboardingCard({ record }: OnboardingCardProps) {
   const retryMutation = useRetryOnboarding();
   const [showLogs, setShowLogs] = useState(false);
-  const config = statusConfig[record.workflow_status];
+  const config = statusConfig[record.job_status];
 
-  const currentStepIndex = STEPS.findIndex((s) => s.key === record.workflow_status);
-  const displaySteps = record.workflow_status === "FAILED" ? STEPS : STEPS.slice(0, currentStepIndex + 1);
+  const currentStepIndex = STEPS.findIndex((s) => s.key === record.job_status);
+  const displaySteps = record.job_status === "FAILED" ? STEPS : STEPS.slice(0, currentStepIndex + 1);
 
   return (
     <Card className="hover:shadow-md transition-shadow border-l-4 border-l-primary/50">
@@ -47,7 +72,7 @@ export function OnboardingCard({ record }: OnboardingCardProps) {
           </div>
           <Badge variant="outline" className={`${config.color} border-0 flex items-center gap-1.5`}>
             {config.icon}
-            {record.workflow_status === "FAILED" ? "Fehlgeschlagen" : record.workflow_status.replace("_", " ")}
+            {record.job_status === "FAILED" ? "Fehlgeschlagen" : record.job_status.replace("_", " ")}
           </Badge>
         </div>
       </CardHeader>
@@ -56,8 +81,8 @@ export function OnboardingCard({ record }: OnboardingCardProps) {
         {/* Vertical Step Indicator */}
         <div className="space-y-2">
           {displaySteps.map((step, idx) => {
-            const isCompleted = idx < currentStepIndex && record.workflow_status !== "FAILED";
-            const isCurrent = idx === currentStepIndex && record.workflow_status !== "FAILED";
+            const isCompleted = idx < currentStepIndex && record.job_status !== "FAILED";
+            const isCurrent = idx === currentStepIndex && record.job_status !== "FAILED";
             
             return (
               <div key={step.key} className="flex items-center gap-3 text-sm">
@@ -80,6 +105,7 @@ export function OnboardingCard({ record }: OnboardingCardProps) {
           <button 
             onClick={() => setShowLogs(!showLogs)}
             className="w-full flex items-center justify-between px-3 py-2 bg-muted/50 hover:bg-muted transition-colors text-xs font-mono text-muted-foreground"
+            aria-expanded={showLogs}
           >
             <span className="flex items-center gap-2">
               <Terminal className="h-3.5 w-3.5" />
@@ -89,18 +115,24 @@ export function OnboardingCard({ record }: OnboardingCardProps) {
           </button>
           {showLogs && (
             <div className="p-3 bg-black/90 text-green-400 text-[11px] font-mono overflow-x-auto max-h-40 overflow-y-auto whitespace-pre-wrap">
-              {record.simulation_log.join("\n\n")}
+              {generateSimulationLog(record).join("\n\n")}
             </div>
           )}
         </div>
 
-        {/* Actions */}
-        {record.workflow_status === "FAILED" && (
+        {/* Retry Action */}
+        {record.job_status === "FAILED" && (
           <Button 
             size="sm" 
             className="w-full"
-            onClick={() => retryMutation.mutate(record.id)}
-            disabled={retryMutation.isPending}
+            onClick={() => {
+              if (!record.job_id) {
+                toast.error("Fehler: job_id fehlt. Bitte Backend-Schema prüfen.");
+                return;
+              }
+              retryMutation.mutate(record.job_id);
+            }}
+            disabled={retryMutation.isPending || !record.job_id}
           >
             {retryMutation.isPending ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : null}
             Vorgang wiederholen

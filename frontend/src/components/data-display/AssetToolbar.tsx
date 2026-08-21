@@ -110,7 +110,6 @@ export function AssetToolbar({
   // AuthBootstrapGate flow from earlier in this thread is deployed and
   // working, since that's what fixed `role` coming back undefined.
   if (import.meta.env.DEV && !isAdmin) {
-    // eslint-disable-next-line no-console
     console.debug("[AssetToolbar] scan button hidden — current role:", role);
   }
 

@@ -23,7 +23,6 @@ export function OnboardingFormDialog() {
       email: "",
       department: "",
       job_title: "",
-      provisioning_source: "local",
     },
   });
 
@@ -38,11 +37,9 @@ export function OnboardingFormDialog() {
 
   return (
     <Dialog open={open} onOpenChange={setOpen}>
-      <DialogTrigger>
-        <Button>
-          <Plus className="mr-2 h-4 w-4" />
-          Onboarding starten
-        </Button>
+      <DialogTrigger className="inline-flex items-center justify-center whitespace-nowrap rounded-md text-sm font-medium ring-offset-background transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 disabled:pointer-events-none disabled:opacity-50 bg-primary text-primary-foreground hover:bg-primary/90 h-10 px-4 py-2">
+        <Plus className="mr-2 h-4 w-4" />
+        Onboarding starten
       </DialogTrigger>
       <DialogContent className="sm:max-w-[500px]">
         <DialogHeader>
@@ -113,6 +110,7 @@ export function OnboardingFormDialog() {
             </div>
 
             <div className="flex gap-3 pt-2">
+              {/* Primary Submit Button */}
               <Button 
                 type="submit" 
                 className="flex-1" 
@@ -123,18 +121,14 @@ export function OnboardingFormDialog() {
               
               <TooltipProvider>
                 <Tooltip>
-                  <TooltipTrigger>
-                    <div className="flex-1">
-                      <Button 
-                        type="button" 
-                        variant="outline" 
-                        className="w-full opacity-60 cursor-not-allowed" 
-                        disabled
-                      >
-                        <Lock className="mr-2 h-4 w-4" />
-                        Entra ID
-                      </Button>
-                    </div>
+                  {/* No asChild. We style the Trigger directly to act as the button. */}
+                  <TooltipTrigger 
+                    className="inline-flex flex-1 items-center justify-center whitespace-nowrap rounded-md text-sm font-medium ring-offset-background transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 disabled:pointer-events-none disabled:opacity-50 border border-input bg-background hover:bg-accent hover:text-accent-foreground h-10 px-4 py-2 opacity-60 cursor-not-allowed"
+                    disabled
+                    aria-disabled="true"
+                  >
+                    <Lock className="mr-2 h-4 w-4" />
+                    Entra ID
                   </TooltipTrigger>
                   <TooltipContent side="top">
                     <p>Entra ID Lizenz erforderlich (Demnächst verfügbar)</p>

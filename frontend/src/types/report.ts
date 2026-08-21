@@ -1,39 +1,69 @@
 import { z } from "zod";
 
-export type ReportType = "asset_inventory" | "health_audit" | "onboarding_summary" | "compliance_log";
-export type ReportStatus = "completed" | "processing" | "failed";
+export type ReportType =
+  | "overview"
+  | "asset_inventory"
+  | "device_health"
+  | "onboarding_summary"
+  | "compliance_audit";
 
-export interface Report {
+export type JobStatus = "queued" | "running" | "completed" | "failed";
+
+// Matches ReportJobResponse from backend/schemas/report.py
+export interface ReportJobResponse {
+  job_id: string;
+  status: JobStatus;
+  error_message?: string | null;
+}
+
+// Matches ReportRead from backend/schemas/report.py
+export interface ReportRead {
   id: string;
-  title: string;
-  type: ReportType;
-  status: ReportStatus;
-  generatedAt: string;
-  generatedBy: string;
-  fileSizeBytes?: number;
-  downloadUrl?: string;
+  report_name: string;
+  report_type: string;
+  triggered_by: string;
+  recipient_emails: string;
+  status: string;
+  sent_at: string;
+  error_message?: string | null;
 }
 
 export const reportTypeLabels: Record<ReportType, string> = {
+  overview: "System Overview Report",
   asset_inventory: "Asset Inventory Report",
-  health_audit: "Device Health Audit",
+  device_health: "Device Health Audit",
   onboarding_summary: "Onboarding Workflow Summary",
-  compliance_log: "Compliance & Security Audit Log",
+  compliance_audit: "Compliance & Security Audit Log",
 };
 
-// German localized validation errors per specification
-export const generateReportSchema = z.object({
-  title: z.string().min(3, { message: "Titel muss mindestens 3 Zeichen lang sein." }),
-  type: z.enum(["asset_inventory", "health_audit", "onboarding_summary", "compliance_log"], {
-    required_error: "Bitte wählen Sie einen Berichtstyp aus.",
-  }),
-  dateRange: z.object({
-    startDate: z.string().min(1, { message: "Startdatum ist erforderlich." }),
-    endDate: z.string().min(1, { message: "Enddatum ist erforderlich." }),
-  }).refine((data) => new Date(data.startDate) <= new Date(data.endDate), {
-    message: "Das Startdatum muss vor dem Enddatum liegen.",
-    path: ["startDate"],
-  }),
-});
+export const reportTriggerSchema = z
+  .object({
+    report_type: z.enum(
+      [
+        "overview",
+        "asset_inventory",
+        "device_health",
+        "onboarding_summary",
+        "compliance_audit",
+      ],
+      {
+        required_error: "Bitte wählen Sie einen Berichtstyp aus.",
+      }
+    ),
+    start_date: z.string().optional(),
+    end_date: z.string().optional(),
+  })
+  .refine(
+    (data) => {
+      if (data.start_date && data.end_date) {
+        return new Date(data.start_date) <= new Date(data.end_date);
+      }
+      return true;
+    },
+    {
+      message: "Das Startdatum muss vor dem Enddatum liegen.",
+      path: ["start_date"],
+    }
+  );
 
-export type GenerateReportInput = z.infer<typeof generateReportSchema>;
+export type ReportTriggerInput = z.infer<typeof reportTriggerSchema>;

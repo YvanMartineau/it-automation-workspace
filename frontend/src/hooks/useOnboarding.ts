@@ -1,20 +1,19 @@
 // src/hooks/useOnboarding.ts
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { api } from "#/lib/api";
-import type { OnboardingRecord, CreateOnboardingRequest } from "#/types/onboarding";
+import type { OnboardedUserListItem, OnboardRequest, OnboardJobStarted } from "#/types/onboarding";
 import { toast } from "sonner";
-
-// NOTE: Adjust response.data to response.data.data if your backend wraps responses in { data: T, meta: ... }
+import { AxiosError } from "axios";
 
 export const useOnboardingList = () => {
-  return useQuery<OnboardingRecord[]>({
-    queryKey: ["onboarding", "list"],
+  return useQuery<OnboardedUserListItem[]>({
+    queryKey: ["onboard", "list"],
     queryFn: async () => {
-      const response = await api.get<OnboardingRecord[]>("/onboarding");
+      const response = await api.get<OnboardedUserListItem[]>("/onboard");
       return response.data;
-    },
-    // Polling to track realistic step progression from n8n webhooks
-    refetchInterval: 5000, 
+ },
+    // Polling every 5s to match backend workflow progression
+    refetchInterval: 5000,
   });
 };
 
@@ -22,36 +21,40 @@ export const useCreateOnboarding = () => {
   const queryClient = useQueryClient();
   
   return useMutation({
-    mutationFn: (data: CreateOnboardingRequest) => 
-      api.post<OnboardingRecord>("/onboarding", data).then(res => res.data),
+    mutationFn: (data: OnboardRequest) => 
+      api.post<OnboardJobStarted>("/onboard", data).then(res => res.data),
       
     onMutate: async (newData) => {
-      await queryClient.cancelQueries({ queryKey: ["onboarding", "list"] });
-      const previousData = queryClient.getQueryData<OnboardingRecord[]>(["onboarding", "list"]) || [];
+      await queryClient.cancelQueries({ queryKey: ["onboard", "list"] });
+      const previousData = queryClient.getQueryData<OnboardedUserListItem[]>(["onboard", "list"]) || [];
       
       // Optimistic update for instant UI feedback
-      const optimisticRecord: OnboardingRecord = {
-        id: `temp-${Date.now()}`,
+      const optimisticRecord: OnboardedUserListItem = {
+        user_id: `temp-${Date.now()}`,
+        job_id: `temp-job-${Date.now()}`,
+        external_id: null,
         ...newData,
-        user_status: "active",
-        workflow_status: "PENDING",
-        simulation_log: ["Optimistisch: In Warteschlange..."],
+        status: "active",
+        job_status: "PENDING",
+        provisioning_source: "local",
+        requested_by: "Current User", // Ideally from auth store
+        error_message: null,
         created_at: new Date().toISOString(),
-        updated_at: null,
+        offboarded_at: null,
       };
       
-      queryClient.setQueryData(["onboarding", "list"], [...previousData, optimisticRecord]);
+      queryClient.setQueryData(["onboard", "list"], [...previousData, optimisticRecord]);
       return { previousData };
     },
     
-    onError: (err, newData, context) => {
-      queryClient.setQueryData(["onboarding", "list"], context?.previousData);
+    onError: (_error, _newData, context) => {
+      queryClient.setQueryData(["onboard", "list"], context?.previousData);
       toast.error("Fehler beim Erstellen des Onboarding-Vorgangs.");
     },
     
     onSuccess: () => {
       toast.success("Onboarding-Vorgang erfolgreich gestartet.");
-      queryClient.invalidateQueries({ queryKey: ["onboarding", "list"] });
+      queryClient.invalidateQueries({ queryKey: ["onboard", "list"] });
     },
   });
 };
@@ -60,16 +63,21 @@ export const useRetryOnboarding = () => {
   const queryClient = useQueryClient();
   
   return useMutation({
-    mutationFn: (id: string) => 
-      api.post<OnboardingRecord>(`/onboarding/${id}/retry`).then(res => res.data),
+    mutationFn: (jobId: string) => 
+      api.post<OnboardJobStarted>(`/onboard/jobs/${jobId}/retry`).then(res => res.data),
       
     onSuccess: () => {
       toast.info("Onboarding-Schritt wird erneut ausgeführt...");
-      queryClient.invalidateQueries({ queryKey: ["onboarding", "list"] });
+      queryClient.invalidateQueries({ queryKey: ["onboard", "list"] });
     },
     
-    onError: () => {
-      toast.error("Fehler beim Wiederholen des Vorgangs.");
+    onError: (error: unknown) => { // 👈 CHANGE 'any' TO 'unknown'
+      // 👈 USE TYPE GUARD TO SAFELY ACCESS AXIOS PROPERTIES
+      if (error instanceof AxiosError && error.response?.status === 409) {
+        toast.error("Dieser Vorgang kann nicht wiederholt werden (bereits abgeschlossen oder läuft).");
+      } else {
+        toast.error("Fehler beim Wiederholen des Vorgangs.");
+      }
     },
   });
 };

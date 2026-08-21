@@ -2,10 +2,10 @@
 import { useOnboardingList } from "#/hooks/useOnboarding";
 import { OnboardingCard } from "#/components/onboarding/OnboardingCard";
 import { OnboardingFormDialog } from "#/components/onboarding/OnboardingFormDialog";
-import { TableSkeleton } from "#/components/feedback/TableSkeleton"; // Assuming this exists
-import type { OnboardingStatus } from "#types/onboarding.ts";
+import { TableSkeleton } from "#/components/feedback/TableSkeleton";
+import type { OnboardingWorkflowStatus } from "#/types/onboarding";
 
-const COLUMNS: { id: OnboardingStatus | "ALL"; label: string }[] = [
+const COLUMNS: { id: OnboardingWorkflowStatus | "ALL"; label: string }[] = [
   { id: "ALL", label: "Alle" },
   { id: "PENDING", label: "Ausstehend" },
   { id: "AD_CREATING", label: "AD Erstellung" },
@@ -36,7 +36,7 @@ export default function OnboardingPage() {
       {/* Hybrid Kanban Board Layout */}
       <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-6">
         {COLUMNS.filter(col => col.id !== "ALL").map((column) => {
-          const columnRecords = records?.filter((r) => r.status === column.id) || [];
+          const columnRecords = records?.filter((r) => r.job_status === column.id) || [];
           
           return (
             <div key={column.id} className="space-y-3">
@@ -56,7 +56,7 @@ export default function OnboardingPage() {
                   </div>
                 ) : (
                   columnRecords.map((record) => (
-                    <OnboardingCard key={record.id} record={record} />
+                    <OnboardingCard key={record.user_id} record={record} />
                   ))
                 )}
               </div>
