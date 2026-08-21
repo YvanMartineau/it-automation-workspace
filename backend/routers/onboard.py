@@ -82,8 +82,17 @@ async def report_job_status(
 ) -> None:
     if not settings.N8N_CALLBACK_SECRET or x_callback_secret != settings.N8N_CALLBACK_SECRET:
         raise HTTPException(status_code=401, detail="Invalid or missing callback secret")
+
     if get_job(job_id) is None:
-        raise HTTPException(status_code=404, detail="Unknown job_id")
+        # In-memory store may have been wiped by a dev-server restart —
+        # Postgres is the durable source of truth, check there before 404ing.
+        result = await db.execute(select(OnboardedUser).where(OnboardedUser.job_id == job_id))
+        if result.scalar_one_or_none() is None:
+            raise HTTPException(status_code=404, detail="Unknown job_id")
+        # Job existed — update the persisted record even though no live
+        # SSE listener remains for it. update_job_status() below already
+        # no-ops safely when the in-memory job is gone, so nothing extra
+        # needed there.
 
     await update_job_status(job_id, body.status, {"error": body.error} if body.error else None)
     await update_onboarding_job_status(db, job_id, OnboardJobStatus(body.status), error_message=body.error)
