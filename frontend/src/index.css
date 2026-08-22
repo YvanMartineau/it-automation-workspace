@@ -280,5 +280,26 @@
   .stagger-4 { animation-delay: 0.2s; opacity: 0; }
   .stagger-5 { animation-delay: 0.25s; opacity: 0; }
   .stagger-6 { animation-delay: 0.3s; opacity: 0; }
+
+  /* Status change animation — one-shot pulse for onboarding cards */
+  @keyframes status-pulse {
+    0% { background-color: var(--pulse-color); }
+    100% { background-color: transparent; }
+  }
+
+  @keyframes status-ring {
+    0% { box-shadow: 0 0 0 0 var(--ring-color); }
+    70% { box-shadow: 0 0 0 6px transparent; }
+    100% { box-shadow: 0 0 0 0 transparent; }
+  }
+
+  .animate-status-pulse {
+    animation: status-pulse 1.4s cubic-bezier(0.23, 1, 0.32, 1) forwards;
+  }
+
+  .animate-status-ring {
+    animation: status-ring 1.4s cubic-bezier(0.23, 1, 0.32, 1) forwards;
+  }
+  
 }
 

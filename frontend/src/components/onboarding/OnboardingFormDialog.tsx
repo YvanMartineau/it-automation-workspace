@@ -1,20 +1,37 @@
-// src/components/onboarding/OnboardingFormDialog.tsx
+// src/components/onboarding/OnboardingFormDialog.tsx — Premium Edition
 import { useState } from "react";
 import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
-import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from "#/components/ui/dialog";
-import { Form, FormControl, FormField, FormItem, FormLabel, FormMessage } from "#/components/ui/form";
+import {
+  Dialog,
+  DialogContent,
+  DialogTitle,
+  DialogTrigger,
+} from "#/components/ui/dialog";
+import {
+  Form,
+  FormControl,
+  FormField,
+  FormItem,
+  FormLabel,
+  FormMessage,
+} from "#/components/ui/form";
 import { Input } from "#/components/ui/input";
 import { Button } from "#/components/ui/button";
-import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "#/components/ui/tooltip";
-import { Plus, Lock } from "lucide-react";
+import {
+  Tooltip,
+  TooltipContent,
+  TooltipProvider,
+  TooltipTrigger,
+} from "#/components/ui/tooltip";
+import { Plus, Lock, Loader2, UserPlus } from "lucide-react";
 import { onboardingFormSchema, type OnboardingFormValues } from "#/lib/validators";
 import { useCreateOnboarding } from "#/hooks/useOnboarding";
 
 export function OnboardingFormDialog() {
   const [open, setOpen] = useState(false);
   const createMutation = useCreateOnboarding();
-  
+
   const form = useForm<OnboardingFormValues>({
     resolver: zodResolver(onboardingFormSchema),
     defaultValues: {
@@ -31,113 +48,181 @@ export function OnboardingFormDialog() {
       onSuccess: () => {
         setOpen(false);
         form.reset();
-      }
+      },
     });
   };
 
   return (
     <Dialog open={open} onOpenChange={setOpen}>
-      <DialogTrigger className="inline-flex items-center justify-center whitespace-nowrap rounded-md text-sm font-medium ring-offset-background transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 disabled:pointer-events-none disabled:opacity-50 bg-primary text-primary-foreground hover:bg-primary/90 h-10 px-4 py-2">
-        <Plus className="mr-2 h-4 w-4" />
-        Onboarding starten
+      <DialogTrigger>
+        <Button type="button" className="gap-2 rounded-xl px-5 shadow-sm">
+          <Plus className="h-4 w-4" aria-hidden="true" />
+          Onboarding starten
+        </Button>
       </DialogTrigger>
-      <DialogContent className="sm:max-w-[500px]">
-        <DialogHeader>
-          <DialogTitle>Neuen Onboarding-Vorgang erstellen</DialogTitle>
-        </DialogHeader>
-        <Form {...form}>
-          <form onSubmit={form.handleSubmit(onSubmit)} className="space-y-4 pt-4">
-            <div className="grid grid-cols-2 gap-4">
-              <FormField
-                control={form.control}
-                name="first_name"
-                render={({ field }) => (
-                  <FormItem>
-                    <FormLabel>Vorname</FormLabel>
-                    <FormControl><Input placeholder="Max" {...field} /></FormControl>
-                    <FormMessage />
-                  </FormItem>
-                )}
-              />
-              <FormField
-                control={form.control}
-                name="last_name"
-                render={({ field }) => (
-                  <FormItem>
-                    <FormLabel>Nachname</FormLabel>
-                    <FormControl><Input placeholder="Mustermann" {...field} /></FormControl>
-                    <FormMessage />
-                  </FormItem>
-                )}
-              />
-            </div>
 
-            <FormField
-              control={form.control}
-              name="email"
-              render={({ field }) => (
-                <FormItem>
-                  <FormLabel>E-Mail</FormLabel>
-                  <FormControl><Input type="email" placeholder="max.mustermann@company.com" {...field} /></FormControl>
-                  <FormMessage />
-                </FormItem>
-              )}
-            />
+      <DialogContent className="sm:max-w-[520px] rounded-2xl p-0 overflow-hidden">
+        {/* Header with gradient accent */}
+        <div className="relative bg-gradient-to-br from-primary/5 to-primary/[0.02] px-6 pt-6 pb-4 border-b border-border/40">
+          <div className="flex items-center gap-3">
+            <div className="flex h-10 w-10 items-center justify-center rounded-xl bg-primary/10 ring-1 ring-primary/20">
+              <UserPlus className="h-5 w-5 text-primary" />
+            </div>
+            <div>
+              <DialogTitle className="text-lg font-semibold">Neuen Onboarding-Vorgang erstellen</DialogTitle>
+              <p className="text-xs text-muted-foreground/60 mt-0.5">
+                Neuer Mitarbeiter wird der Pipeline hinzugefügt.
+              </p>
+            </div>
+          </div>
+        </div>
 
-            <div className="grid grid-cols-2 gap-4">
+        <div className="px-6 py-5">
+          <Form {...form}>
+            <form onSubmit={form.handleSubmit(onSubmit)} className="space-y-5">
+              {/* Name Row */}
+              <div className="grid grid-cols-2 gap-4">
+                <FormField
+                  control={form.control}
+                  name="first_name"
+                  render={({ field }) => (
+                    <FormItem>
+                      <FormLabel className="text-xs font-semibold uppercase tracking-wider text-muted-foreground/70">
+                        Vorname
+                      </FormLabel>
+                      <FormControl>
+                        <Input
+                          placeholder="Max"
+                          className="rounded-xl h-10 focus-visible:ring-primary/30"
+                          {...field}
+                        />
+                      </FormControl>
+                      <FormMessage className="text-[11px]" />
+                    </FormItem>
+                  )}
+                />
+                <FormField
+                  control={form.control}
+                  name="last_name"
+                  render={({ field }) => (
+                    <FormItem>
+                      <FormLabel className="text-xs font-semibold uppercase tracking-wider text-muted-foreground/70">
+                        Nachname
+                      </FormLabel>
+                      <FormControl>
+                        <Input
+                          placeholder="Mustermann"
+                          className="rounded-xl h-10 focus-visible:ring-primary/30"
+                          {...field}
+                        />
+                      </FormControl>
+                      <FormMessage className="text-[11px]" />
+                    </FormItem>
+                  )}
+                />
+              </div>
+
+              {/* Email */}
               <FormField
                 control={form.control}
-                name="department"
+                name="email"
                 render={({ field }) => (
                   <FormItem>
-                    <FormLabel>Abteilung</FormLabel>
-                    <FormControl><Input placeholder="Engineering" {...field} /></FormControl>
-                    <FormMessage />
+                    <FormLabel className="text-xs font-semibold uppercase tracking-wider text-muted-foreground/70">
+                      E-Mail
+                    </FormLabel>
+                    <FormControl>
+                      <Input
+                        type="email"
+                        placeholder="max.mustermann@company.com"
+                        className="rounded-xl h-10 focus-visible:ring-primary/30"
+                        {...field}
+                      />
+                    </FormControl>
+                    <FormMessage className="text-[11px]" />
                   </FormItem>
                 )}
               />
-              <FormField
-                control={form.control}
-                name="job_title"
-                render={({ field }) => (
-                  <FormItem>
-                    <FormLabel>Berufsbezeichnung</FormLabel>
-                    <FormControl><Input placeholder="Software Engineer" {...field} /></FormControl>
-                    <FormMessage />
-                  </FormItem>
-                )}
-              />
-            </div>
 
-            <div className="flex gap-3 pt-2">
-              {/* Primary Submit Button */}
-              <Button 
-                type="submit" 
-                className="flex-1" 
-                disabled={createMutation.isPending}
-              >
-                {createMutation.isPending ? "Wird erstellt..." : "Lokal erstellen (DB)"}
-              </Button>
-              
-              <TooltipProvider>
-                <Tooltip>
-                  {/* No asChild. We style the Trigger directly to act as the button. */}
-                  <TooltipTrigger 
-                    className="inline-flex flex-1 items-center justify-center whitespace-nowrap rounded-md text-sm font-medium ring-offset-background transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 disabled:pointer-events-none disabled:opacity-50 border border-input bg-background hover:bg-accent hover:text-accent-foreground h-10 px-4 py-2 opacity-60 cursor-not-allowed"
-                    disabled
-                    aria-disabled="true"
-                  >
-                    <Lock className="mr-2 h-4 w-4" />
-                    Entra ID
-                  </TooltipTrigger>
-                  <TooltipContent side="top">
-                    <p>Entra ID Lizenz erforderlich (Demnächst verfügbar)</p>
-                  </TooltipContent>
-                </Tooltip>
-              </TooltipProvider>
-            </div>
-          </form>
-        </Form>
+              {/* Department & Job Title */}
+              <div className="grid grid-cols-2 gap-4">
+                <FormField
+                  control={form.control}
+                  name="department"
+                  render={({ field }) => (
+                    <FormItem>
+                      <FormLabel className="text-xs font-semibold uppercase tracking-wider text-muted-foreground/70">
+                        Abteilung
+                      </FormLabel>
+                      <FormControl>
+                        <Input
+                          placeholder="Engineering"
+                          className="rounded-xl h-10 focus-visible:ring-primary/30"
+                          {...field}
+                        />
+                      </FormControl>
+                      <FormMessage className="text-[11px]" />
+                    </FormItem>
+                  )}
+                />
+                <FormField
+                  control={form.control}
+                  name="job_title"
+                  render={({ field }) => (
+                    <FormItem>
+                      <FormLabel className="text-xs font-semibold uppercase tracking-wider text-muted-foreground/70">
+                        Berufsbezeichnung
+                      </FormLabel>
+                      <FormControl>
+                        <Input
+                          placeholder="Software Engineer"
+                          className="rounded-xl h-10 focus-visible:ring-primary/30"
+                          {...field}
+                        />
+                      </FormControl>
+                      <FormMessage className="text-[11px]" />
+                    </FormItem>
+                  )}
+                />
+              </div>
+
+              {/* Action Buttons */}
+              <div className="flex gap-3 pt-2">
+                <Button
+                  type="submit"
+                  className="flex-1 rounded-xl h-10 gap-2"
+                  disabled={createMutation.isPending}
+                >
+                  {createMutation.isPending ? (
+                    <Loader2 className="h-4 w-4 animate-spin" />
+                  ) : (
+                    <Plus className="h-4 w-4" />
+                  )}
+                  {createMutation.isPending ? "Wird erstellt…" : "Lokal erstellen (DB)"}
+                </Button>
+
+                <TooltipProvider>
+                  <Tooltip>
+                    <TooltipTrigger>
+                      <Button
+                        type="button"
+                        variant="outline"
+                        className="flex-1 rounded-xl h-10 gap-2 opacity-60 cursor-not-allowed"
+                        disabled
+                      >
+                        <Lock className="h-3.5 w-3.5" />
+                        Entra ID
+                      </Button>
+                    </TooltipTrigger>
+                    <TooltipContent side="top" className="rounded-xl">
+                      <p className="text-xs">Entra ID Lizenz erforderlich (Demnächst verfügbar)</p>
+                    </TooltipContent>
+                  </Tooltip>
+                </TooltipProvider>
+              </div>
+            </form>
+          </Form>
+        </div>
       </DialogContent>
     </Dialog>
   );
