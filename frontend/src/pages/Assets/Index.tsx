@@ -1,5 +1,5 @@
 /**
- * Asset Dashboard Page
+ * Asset Dashboard Page — Premium Edition
  * High-density data table with real-time updates, virtualization, and batch operations
  * @module pages/Assets/Index
  */
@@ -83,15 +83,21 @@ export default function AssetIndex() {
   );
 
   return (
-    <div className="space-y-6">
-      <div className="flex items-center justify-between">
+    <div className="space-y-8">
+      {/* Page Header */}
+      <header className="flex flex-col sm:flex-row sm:items-end sm:justify-between gap-4">
         <div>
-          <h1 className="text-2xl font-semibold tracking-tight">Assets</h1>
-          <p className="text-muted-foreground">
-            {isFetching && !isLoading ? "Aktualisierung..." : "Asset-Verwaltung und -Überwachung"}
+          <h1 className="text-2xl font-bold tracking-tight text-gradient sm:text-3xl">
+            Assets
+          </h1>
+          <p className="text-sm text-muted-foreground/70 mt-1.5 max-w-xl leading-relaxed">
+            {isFetching && !isLoading 
+              ? "Aktualisierung läuft…" 
+              : "Asset-Verwaltung und -Überwachung in Echtzeit."
+            }
           </p>
         </div>
-      </div>
+      </header>
 
       <AssetStats />
 

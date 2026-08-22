@@ -9,11 +9,12 @@ import {
   FileSpreadsheet,
   FileJson,
   ScanLine,
+  Search,
+  X,
 } from "lucide-react";
 import { toast } from "sonner";
 import { Button } from "#/components/ui/button";
 import { Input } from "#/components/ui/input";
-import { SearchInput } from "#/components/forms/SearchInput";
 import {
   Select,
   SelectContent,
@@ -35,11 +36,10 @@ import { ScanDialog } from "#/components/feedback/ScanDialog";
 import { useScanStream } from "#/hooks/useScanStream";
 import { useAuthStore } from "#/hooks/useAuth";
 import { scanRequestSchema } from "#/types/scan";
+import { cn } from "#/lib/utils";
 import type { Table as TanStackTable } from "@tanstack/react-table";
 import type { Asset, AssetFilters, DeviceStatus, AssetHealth } from "#/types/asset";
 
-// Falls back here if nothing else supplies a default. Hardcoded per team
-// decision rather than read from a VITE_* env var for this pass.
 const DEFAULT_SCAN_SUBNET = "192.168.179.0/24";
 
 interface AssetToolbarProps {
@@ -48,12 +48,9 @@ interface AssetToolbarProps {
   onFiltersChange: (filters: AssetFilters) => void;
   selectedCount: number;
   onBulkDelete: () => void;
-  /** Called when a scan completes with the number of assets found online. */
   onScanComplete?: (foundCount: number) => void;
 }
 
-// "sleeping" removed, "unknown" added — matches the real DeviceStatus
-// nmap can actually report (models/device.py's DeviceStatus enum).
 const STATUS_OPTIONS: { value: DeviceStatus | "all"; label: string }[] = [
   { value: "all", label: "Alle Status" },
   { value: "online", label: "Online" },
@@ -61,11 +58,6 @@ const STATUS_OPTIONS: { value: DeviceStatus | "all"; label: string }[] = [
   { value: "unknown", label: "Unbekannt" },
 ];
 
-// No longer a fixed enum — os_info is nmap's free-text OS-match string
-// (e.g. "Linux 5.X (88% confidence)"), matched server-side via ILIKE
-// substring (see device_service.py's list_devices_paginated). "Other" is
-// dropped: there's no substring that meaningfully matches "anything else"
-// against free text.
 const OS_OPTIONS: { value: string; label: string }[] = [
   { value: "all", label: "Alle OS" },
   { value: "Windows", label: "Windows" },
@@ -75,9 +67,6 @@ const OS_OPTIONS: { value: string; label: string }[] = [
   { value: "Android", label: "Android" },
 ];
 
-// Labels no longer imply a numeric score — there isn't one. See
-// lib/assetHealth.ts for what each state actually means (status +,
-// for the scan host only, cpu/memory thresholds).
 const HEALTH_OPTIONS: { value: AssetHealth | "all"; label: string }[] = [
   { value: "all", label: "Alle Health" },
   { value: "healthy", label: "Gesund" },
@@ -102,13 +91,9 @@ export function AssetToolbar({
   const [now, setNow] = useState(() => Date.now());
 
   const { state: scanState, startScan, dismissResult } = useScanStream();
-
   const role = useAuthStore((s) => s.user?.role);
   const isAdmin = typeof role === "string" && role.toLowerCase() === "admin";
 
-  // Dev-only diagnostic — safe to remove once you've confirmed the
-  // AuthBootstrapGate flow from earlier in this thread is deployed and
-  // working, since that's what fixed `role` coming back undefined.
   if (import.meta.env.DEV && !isAdmin) {
     console.debug("[AssetToolbar] scan button hidden — current role:", role);
   }
@@ -120,8 +105,6 @@ export function AssetToolbar({
     onFiltersChange({ ...filters, [key]: value });
   };
 
-  // Toast + auto-close on completion/error. Driven by useScanStream's real
-  // state transitions, not a simulated interval.
   useEffect(() => {
     if (scanState.status === "complete") {
       const timer = setTimeout(() => {
@@ -145,9 +128,6 @@ export function AssetToolbar({
     }
   }, [scanState.status, scanState.hostsFound, scanState.errorMessage, onScanComplete]);
 
-  // Ticks every second while a 429 cooldown is active, to drive the
-  // countdown label on the scan button. No interval is created once
-  // cooldownUntil is null or already in the past.
   useEffect(() => {
     if (!scanState.cooldownUntil || scanState.cooldownUntil <= Date.now()) return;
     const interval = setInterval(() => setNow(Date.now()), 1000);
@@ -160,12 +140,10 @@ export function AssetToolbar({
       : 0;
 
   const handleScanButtonClick = useCallback(() => {
-    // Already running — reopen the dialog to watch it, don't start a new one.
     if (scanState.status === "scanning" || scanState.status === "starting") {
       setScanOpen(true);
       return;
     }
-
     const parsed = scanRequestSchema.safeParse({ subnet: subnetInput });
     if (!parsed.success) {
       toast.error("Ungültiges Subnetz", {
@@ -173,7 +151,6 @@ export function AssetToolbar({
       });
       return;
     }
-
     setScanOpen(true);
     void startScan(parsed.data.subnet);
   }, [scanState.status, subnetInput, startScan]);
@@ -183,16 +160,11 @@ export function AssetToolbar({
     if (parsed.success) void startScan(parsed.data.subnet);
   }, [subnetInput, startScan]);
 
-  // Closing/minimizing the dialog NEVER aborts the SSE reader — the scan
-  // (and our listening for it) keeps going in the background. Only
-  // unmounting this component (e.g. navigating away) stops it.
   const handleMinimize = useCallback(() => setScanOpen(false), []);
 
   const handleDialogOpenChange = useCallback(
     (open: boolean) => {
       setScanOpen(open);
-      // Closing a finished/errored dialog clears the result so the next
-      // button click starts fresh instead of showing stale data.
       if (!open && (scanState.status === "complete" || scanState.status === "error")) {
         dismissResult();
       }
@@ -213,37 +185,66 @@ export function AssetToolbar({
   const isScanBusy = scanState.status === "scanning" || scanState.status === "starting";
   const scanDisabled = !isAdmin || cooldownSecondsRemaining > 0;
 
+  const activeFilterCount = [
+    filters.status !== "all",
+    filters.os !== "all",
+    filters.health !== "all",
+  ].filter(Boolean).length;
+
   return (
     <div className="space-y-4">
       {/* Primary toolbar */}
-      <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
-        <div className="flex flex-1 items-center gap-4">
-          <SearchInput
-            value={filters.search}
-            onChange={(value) => updateFilter("search", value)}
-            placeholder="Hostname, IP, MAC suchen..."
-            className="max-w-sm"
-            ariaLabel="Asset-Suche"
-          />
+      <div className="flex flex-col gap-4 lg:flex-row lg:items-center lg:justify-between">
+        {/* Left: Search + Filter toggle */}
+        <div className="flex flex-1 items-center gap-3">
+          <div className="relative max-w-sm flex-1">
+            <Search className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground/50" aria-hidden="true" />
+            <Input
+              value={filters.search}
+              onChange={(e) => updateFilter("search", e.target.value)}
+              placeholder="Hostname, IP, MAC suchen..."
+              className="h-10 pl-10 pr-4 rounded-xl bg-card border-border/60 focus-visible:ring-primary/30"
+              aria-label="Asset-Suche"
+            />
+            {filters.search && (
+              <button
+                onClick={() => updateFilter("search", "")}
+                className="absolute right-3 top-1/2 -translate-y-1/2 text-muted-foreground/40 hover:text-muted-foreground transition-colors"
+                aria-label="Suche löschen"
+              >
+                <X className="h-3.5 w-3.5" />
+              </button>
+            )}
+          </div>
+
           <Button
             variant="outline"
             size="sm"
             onClick={() => setShowFilters(!showFilters)}
-            className="gap-2"
+            className={cn(
+              "gap-2 rounded-xl h-10 px-4 border-border/60 transition-all duration-200",
+              showFilters && "bg-accent border-accent text-accent-foreground"
+            )}
             aria-expanded={showFilters}
           >
             <Filter className="h-4 w-4" aria-hidden="true" />
             Filter
+            {activeFilterCount > 0 && (
+              <span className="flex h-5 w-5 items-center justify-center rounded-full bg-primary text-[10px] font-bold text-primary-foreground">
+                {activeFilterCount}
+              </span>
+            )}
           </Button>
         </div>
 
-        <div className="flex items-center gap-2">
+        {/* Right: Actions */}
+        <div className="flex items-center gap-2 flex-wrap">
           {selectedCount > 0 && (
             <Button
               variant="destructive"
               size="sm"
               onClick={onBulkDelete}
-              className="gap-2"
+              className="gap-2 rounded-xl h-9"
             >
               <Trash2 className="h-4 w-4" aria-hidden="true" />
               {selectedCount} löschen
@@ -254,15 +255,17 @@ export function AssetToolbar({
           <DropdownMenu>
             <DropdownMenuTrigger
               render={
-                <Button variant="outline" size="sm" className="gap-2">
+                <Button variant="outline" size="sm" className="gap-2 rounded-xl h-9 px-3 border-border/60">
                   <Columns3 className="h-4 w-4" aria-hidden="true" />
-                  Anzeige
+                  <span className="hidden sm:inline">Anzeige</span>
                 </Button>
               }
             />
-            <DropdownMenuContent align="end" className="w-48">
+            <DropdownMenuContent align="end" className="w-52 rounded-xl">
               <DropdownMenuGroup>
-                <DropdownMenuLabel>Spalten anzeigen</DropdownMenuLabel>
+                <DropdownMenuLabel className="text-[11px] font-semibold uppercase tracking-wider text-muted-foreground/60">
+                  Spalten anzeigen
+                </DropdownMenuLabel>
                 <DropdownMenuSeparator />
                 {hideableColumns.map((column) => {
                   const header = column.columnDef.header;
@@ -286,29 +289,29 @@ export function AssetToolbar({
           <DropdownMenu>
             <DropdownMenuTrigger
               render={
-                <Button variant="outline" size="sm" className="gap-2">
+                <Button variant="outline" size="sm" className="gap-2 rounded-xl h-9 px-3 border-border/60">
                   <Download className="h-4 w-4" aria-hidden="true" />
-                  Export
+                  <span className="hidden sm:inline">Export</span>
                 </Button>
               }
             />
-            <DropdownMenuContent align="end">
-              <DropdownMenuItem onClick={() => handleExport("csv")} className="gap-2">
-                <FileText className="h-4 w-4" aria-hidden="true" />
+            <DropdownMenuContent align="end" className="rounded-xl">
+              <DropdownMenuItem onClick={() => handleExport("csv")} className="gap-2 rounded-lg">
+                <FileText className="h-4 w-4 text-muted-foreground" aria-hidden="true" />
                 Als CSV
               </DropdownMenuItem>
-              <DropdownMenuItem onClick={() => handleExport("xlsx")} className="gap-2">
-                <FileSpreadsheet className="h-4 w-4" aria-hidden="true" />
+              <DropdownMenuItem onClick={() => handleExport("xlsx")} className="gap-2 rounded-lg">
+                <FileSpreadsheet className="h-4 w-4 text-muted-foreground" aria-hidden="true" />
                 Als Excel (.xlsx)
               </DropdownMenuItem>
-              <DropdownMenuItem onClick={() => handleExport("pdf")} className="gap-2">
-                <FileJson className="h-4 w-4" aria-hidden="true" />
+              <DropdownMenuItem onClick={() => handleExport("pdf")} className="gap-2 rounded-lg">
+                <FileJson className="h-4 w-4 text-muted-foreground" aria-hidden="true" />
                 Als PDF
               </DropdownMenuItem>
             </DropdownMenuContent>
           </DropdownMenu>
 
-          {/* Network Scan — admin only, per POST /scan's get_admin_user dependency */}
+          {/* Network Scan — admin only */}
           {isAdmin && (
             <div className="flex items-center gap-2">
               <Input
@@ -316,21 +319,21 @@ export function AssetToolbar({
                 onChange={(e) => setSubnetInput(e.target.value)}
                 placeholder="192.168.1.0/24"
                 aria-label="Subnetz für Netzwerk-Scan"
-                className="w-40"
+                className="w-40 h-9 rounded-xl bg-card border-border/60 text-xs font-mono focus-visible:ring-primary/30"
                 disabled={isScanBusy}
               />
               <Button
                 size="sm"
-                className="gap-2"
+                className="gap-2 rounded-xl h-9"
                 onClick={handleScanButtonClick}
                 disabled={scanDisabled && !isScanBusy}
               >
                 <ScanLine className="h-4 w-4" aria-hidden="true" />
                 {isScanBusy
-                  ? "Scan läuft… (anzeigen)"
+                  ? "Scan läuft…"
                   : cooldownSecondsRemaining > 0
                     ? `Warten (${cooldownSecondsRemaining}s)`
-                    : "Netzwerk-Scan"}
+                    : "Scan"}
               </Button>
             </div>
           )}
@@ -338,18 +341,23 @@ export function AssetToolbar({
       </div>
 
       {/* Expandable filter panel */}
-      {showFilters && (
-        <div className="flex flex-wrap gap-4 rounded-lg border bg-card p-4">
+      <div
+        className={cn(
+          "overflow-hidden transition-all duration-300 ease-premium",
+          showFilters ? "max-h-40 opacity-100" : "max-h-0 opacity-0"
+        )}
+      >
+        <div className="flex flex-wrap gap-3 rounded-xl border border-border/60 bg-card/80 backdrop-blur-sm p-4 shadow-sm">
           <Select
             value={filters.status}
             onValueChange={(value) => updateFilter("status", value as DeviceStatus | "all")}
           >
-            <SelectTrigger className="w-[180px]">
+            <SelectTrigger className="w-[170px] h-9 rounded-lg bg-background/50 border-border/50 text-xs">
               <SelectValue placeholder="Status" />
             </SelectTrigger>
-            <SelectContent>
+            <SelectContent className="rounded-xl">
               {STATUS_OPTIONS.map((opt) => (
-                <SelectItem key={opt.value} value={opt.value}>
+                <SelectItem key={opt.value} value={opt.value} className="text-xs">
                   {opt.label}
                 </SelectItem>
               ))}
@@ -360,12 +368,12 @@ export function AssetToolbar({
             value={filters.os}
             onValueChange={(value) => updateFilter("os", value ?? "all")}
           >
-            <SelectTrigger className="w-[180px]">
+            <SelectTrigger className="w-[170px] h-9 rounded-lg bg-background/50 border-border/50 text-xs">
               <SelectValue placeholder="Betriebssystem" />
             </SelectTrigger>
-            <SelectContent>
+            <SelectContent className="rounded-xl">
               {OS_OPTIONS.map((opt) => (
-                <SelectItem key={opt.value} value={opt.value}>
+                <SelectItem key={opt.value} value={opt.value} className="text-xs">
                   {opt.label}
                 </SelectItem>
               ))}
@@ -376,19 +384,19 @@ export function AssetToolbar({
             value={filters.health}
             onValueChange={(value) => updateFilter("health", value as AssetHealth | "all")}
           >
-            <SelectTrigger className="w-[180px]">
+            <SelectTrigger className="w-[170px] h-9 rounded-lg bg-background/50 border-border/50 text-xs">
               <SelectValue placeholder="Health" />
             </SelectTrigger>
-            <SelectContent>
+            <SelectContent className="rounded-xl">
               {HEALTH_OPTIONS.map((opt) => (
-                <SelectItem key={opt.value} value={opt.value}>
+                <SelectItem key={opt.value} value={opt.value} className="text-xs">
                   {opt.label}
                 </SelectItem>
               ))}
             </SelectContent>
           </Select>
         </div>
-      )}
+      </div>
 
       {/* Scan Dialog */}
       <ScanDialog

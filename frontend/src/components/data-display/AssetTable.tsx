@@ -5,6 +5,7 @@ import { VirtualizedTableBody } from "./VirtualizedTableBody";
 import { AssetPagination } from "./AssetPagination";
 import { AssetEmptyState } from "./AssetEmptyState";
 import { TableSkeleton } from "#/components/feedback/TableSkeleton";
+import { cn } from "#/lib/utils";
 import type { Asset, PaginatedAssetList } from "#/types/asset";
 
 interface AssetTableProps {
@@ -29,26 +30,8 @@ export function AssetTable({
   onFiltersReset,
 }: AssetTableProps) {
   const scrollContainerRef = useRef<HTMLDivElement>(null);
-
   const visibleColumns = table.getVisibleLeafColumns();
 
-  // BUG FIX (horizontal scroll losing its styling): the header row and each
-  // body row previously each set their own `width: "100%"` (or `w-full`)
-  // independently, while relying on `display: grid` + `minmax(size, 1fr)`
-  // tracks to force overflow when content was wider than the container.
-  // That works in principle, but it means header and body rows only agree
-  // on their rendered width *implicitly*, via each one separately resolving
-  // "100% of my containing block" vs "however wide my grid tracks force me
-  // to be" — plus the header additionally carried `transform: translateZ(0)`
-  // for a sticky-position hint it didn't need, which can introduce its own
-  // sub-pixel rounding under a transform vs. the untransformed body rows.
-  // Small per-row disagreements compound as you scroll, which reads as the
-  // table "losing its styling."
-  //
-  // Fix: compute one explicit pixel width from the actual column sizes and
-  // apply it as `minWidth` to the header and every row, so they are always
-  // measured identically instead of independently re-deriving a width that
-  // happens to usually match.
   const tableMinWidth = useMemo(
     () => visibleColumns.reduce((sum, col) => sum + col.getSize(), 0),
     [visibleColumns]
@@ -79,59 +62,62 @@ export function AssetTable({
 
   return (
     <div className="space-y-4">
+      {/* Selection banner */}
       {selectedRows.length > 0 && (
-        <div className="flex items-center gap-2 rounded-md bg-muted px-4 py-2 text-sm">
-          <span className="font-medium">{selectedRows.length}</span> Assets ausgewählt
+        <div className="flex items-center gap-3 rounded-xl bg-primary/[0.06] border border-primary/15 px-4 py-2.5">
+          <div className="h-2 w-2 rounded-full bg-primary animate-pulse-soft" aria-hidden="true" />
+          <span className="text-sm font-medium text-primary">
+            {selectedRows.length}
+          </span>
+          <span className="text-sm text-muted-foreground">
+            {selectedRows.length === 1 ? "Asset ausgewählt" : "Assets ausgewählt"}
+          </span>
         </div>
       )}
 
-      <div className="rounded-md border">
-        {/*
-          Single scroll container for header + body. Horizontal scroll on small
-          screens now natively moves both together — no scroll-sync JS needed.
-          maxHeight is only applied when virtualizing, since that's the only
-          case that needs a bounded vertical viewport for windowing to work;
-          the plain-row path just grows with its content, no artificial scrollbox.
-        */}
+      {/* Table container */}
+      <div className="rounded-xl border border-border/80 shadow-card dark:shadow-card-dark overflow-hidden bg-card">
         <div
           ref={scrollContainerRef}
           className="w-full overflow-auto"
           style={isVirtualized ? { maxHeight: "600px" } : undefined}
         >
-          {/* width:100% + minWidth is what makes the table shrink to fill
-              available space when fewer columns are shown, and only
-              overflow (via the parent's overflow-auto) once the visible
-              columns' combined minimum exceeds the container. */}
           <div style={{ width: "100%", minWidth: `${tableMinWidth}px` }}>
+            {/* Sticky Header */}
             {table.getHeaderGroups().map((headerGroup) => (
               <div
                 key={headerGroup.id}
-                className="sticky top-0 z-10 grid isolate border-b"
-                style={{ gridTemplateColumns, backgroundColor: "hsl(var(--secondary))" }}
+                className="sticky top-0 z-10 grid isolate border-b border-border/60"
+                style={{ gridTemplateColumns }}
               >
-                {headerGroup.headers.map((header) => (
-                  <div
-                    key={header.id}
-                    className="flex h-12 items-center px-4 text-left align-middle text-sm font-medium "
-                  >
-                    {header.isPlaceholder ? null : (
-                      <div
-                        className={
-                          header.column.getCanSort()
-                            ? "flex cursor-pointer select-none items-center gap-2"
-                            : "flex items-center gap-2"
-                        }
-                        onClick={header.column.getToggleSortingHandler()}
-                      >
-                        {flexRender(header.column.columnDef.header, header.getContext())}
-                        {{ asc: " ↑", desc: " ↓" }[header.column.getIsSorted() as string] ?? null}
-                      </div>
-                    )}
-                  </div>
-                ))}
+                <div
+                  className="contents"
+                  style={{ backgroundColor: "hsl(var(--secondary))" }}
+                >
+                  {headerGroup.headers.map((header) => (
+                    <div
+                      key={header.id}
+                      className="flex h-11 items-center px-4 text-left align-middle bg-secondary/80 backdrop-blur-sm"
+                    >
+                      {header.isPlaceholder ? null : (
+                        <div
+                          className={cn(
+                            "flex items-center gap-1.5 text-[11px] font-semibold uppercase tracking-wider text-muted-foreground/70",
+                            header.column.getCanSort() && "cursor-pointer select-none hover:text-foreground/80"
+                          )}
+                          onClick={header.column.getToggleSortingHandler()}
+                        >
+                          {flexRender(header.column.columnDef.header, header.getContext())}
+                          {{ asc: " ↑", desc: " ↓" }[header.column.getIsSorted() as string] ?? null}
+                        </div>
+                      )}
+                    </div>
+                  ))}
+                </div>
               </div>
             ))}
 
+            {/* Body */}
             {isVirtualized ? (
               <VirtualizedTableBody
                 table={table}
@@ -145,11 +131,16 @@ export function AssetTable({
                   <div
                     key={row.id}
                     data-state={row.getIsSelected() ? "selected" : undefined}
-                    className="grid border-b transition-colors hover:bg-muted/50 data-[state=selected]:bg-muted"
+                    className={cn(
+                      "grid border-b border-border/40",
+                      /* NO transition on rows — performance critical */
+                      "hover:bg-accent/25",
+                      "data-[state=selected]:bg-primary/[0.04]"
+                    )}
                     style={{ gridTemplateColumns }}
                   >
                     {row.getVisibleCells().map((cell) => (
-                      <div key={cell.id} className="flex items-center p-4 align-middle">
+                      <div key={cell.id} className="flex items-center px-4 py-3 align-middle">
                         {flexRender(cell.column.columnDef.cell, cell.getContext())}
                       </div>
                     ))}
