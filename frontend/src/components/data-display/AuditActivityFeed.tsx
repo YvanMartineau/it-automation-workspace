@@ -1,6 +1,7 @@
 /**
- * @fileoverview Recent audit activity feed with contextual icons and metadata.
- * Displays the latest system changes with actor attribution and timestamps.
+ * @fileoverview Recent audit activity feed — Premium Edition.
+ * Timeline-style feed with refined icons, hover states, and
+ * editorial typography.
  */
 
 import { useMemo } from 'react';
@@ -16,40 +17,46 @@ import { cn } from '#/lib/utils';
 import type { AuditActivityItem, AuditActivityType } from '#/lib/mock-data';
 
 // ---------------------------------------------------------------------------
-// Type Configuration
+// Type Configuration — Premium Gradient Icon Backgrounds
 // ---------------------------------------------------------------------------
 
 interface ActivityTypeConfig {
   readonly icon: LucideIcon;
-  readonly iconBg: string;
+  readonly gradient: string;
   readonly iconColor: string;
+  readonly ring: string;
 }
 
 const activityTypeConfig: Record<AuditActivityType, ActivityTypeConfig> = {
   update: {
     icon: Pencil,
-    iconBg: 'bg-primary/10',
+    gradient: 'from-primary/12 to-primary/4',
     iconColor: 'text-primary',
+    ring: 'ring-primary/15',
   },
   create: {
     icon: ShieldCheck,
-    iconBg: 'bg-success/10',
+    gradient: 'from-success/12 to-success/4',
     iconColor: 'text-success',
+    ring: 'ring-success/15',
   },
   delete: {
     icon: Trash2,
-    iconBg: 'bg-danger/10',
+    gradient: 'from-danger/12 to-danger/4',
     iconColor: 'text-danger',
+    ring: 'ring-danger/15',
   },
   alert: {
     icon: AlertTriangle,
-    iconBg: 'bg-warning/10',
+    gradient: 'from-warning/12 to-warning/4',
     iconColor: 'text-warning',
+    ring: 'ring-warning/15',
   },
   report: {
     icon: FileDown,
-    iconBg: 'bg-info/10',
+    gradient: 'from-info/12 to-info/4',
     iconColor: 'text-info',
+    ring: 'ring-info/15',
   },
 };
 
@@ -66,9 +73,9 @@ function formatRelativeTime(isoString: string): string {
   const diffDays = Math.floor(diffMs / 86400000);
 
   if (diffMins < 1) return 'Just now';
-  if (diffMins < 60) return `${diffMins} min ago`;
-  if (diffHours < 24) return `${diffHours} hr ago`;
-  if (diffDays < 7) return `${diffDays} days ago`;
+  if (diffMins < 60) return `${diffMins}m ago`;
+  if (diffHours < 24) return `${diffHours}h ago`;
+  if (diffDays < 7) return `${diffDays}d ago`;
   return date.toLocaleDateString('de-DE', { day: '2-digit', month: 'short' });
 }
 
@@ -88,70 +95,89 @@ export function AuditActivityFeed({ items }: AuditActivityFeedProps): JSX.Elemen
   }, [items]);
 
   return (
-    <ul className="space-y-1" role="list" aria-label="Recent audit activity">
-      {sortedItems.map((item) => {
+    <ul className="space-y-0.5" role="list" aria-label="Recent audit activity">
+      {sortedItems.map((item, index) => {
         const config = activityTypeConfig[item.type];
         const Icon = config.icon;
+        const isLast = index === sortedItems.length - 1;
 
         return (
           <li
             key={item.id}
-            className="flex items-center gap-4 p-3 rounded-md hover:bg-muted/50 transition-colors"
+            className={cn(
+              'group relative flex items-start gap-3.5 rounded-xl p-3',
+              'transition-all duration-200 ease-premium',
+              'hover:bg-accent/40'
+            )}
           >
+            {/* Timeline connector */}
+            {!isLast && (
+              <div 
+                className="absolute left-[26px] top-10 bottom-[-4px] w-px bg-border/40"
+                aria-hidden="true"
+              />
+            )}
+
+            {/* Icon container with gradient */}
             <div
               className={cn(
-                'h-9 w-9 rounded-full flex items-center justify-center shrink-0',
-                config.iconBg
+                'relative z-10 flex h-9 w-9 shrink-0 items-center justify-center rounded-xl',
+                'bg-gradient-to-br',
+                config.gradient,
+                'ring-1',
+                config.ring,
+                'transition-transform duration-200 ease-premium',
+                'group-hover:scale-105'
               )}
               aria-hidden="true"
             >
               <Icon className={cn('h-4 w-4', config.iconColor)} />
             </div>
 
-            <div className="flex-1 min-w-0">
-              <p className="text-sm font-medium truncate">
+            <div className="flex-1 min-w-0 pt-0.5">
+              <p className="text-sm leading-snug text-foreground/90">
                 {item.type === 'update' && (
                   <>
                     Asset{' '}
-                    <span className="text-primary font-semibold">{item.target}</span>
+                    <span className="font-semibold text-primary">{item.target}</span>
                     {' '}updated by{' '}
-                    <span className="font-semibold">{item.actor}</span>
+                    <span className="font-semibold text-foreground">{item.actor}</span>
                   </>
                 )}
                 {item.type === 'create' && (
                   <>
                     Onboarding completed for{' '}
-                    <span className="font-semibold">{item.target}</span>
+                    <span className="font-semibold text-foreground">{item.target}</span>
                   </>
                 )}
                 {item.type === 'delete' && (
                   <>
                     Asset{' '}
-                    <span className="text-primary font-semibold">{item.target}</span>
+                    <span className="font-semibold text-primary">{item.target}</span>
                     {' '}deleted by{' '}
-                    <span className="font-semibold">{item.actor}</span>
+                    <span className="font-semibold text-foreground">{item.actor}</span>
                   </>
                 )}
                 {item.type === 'alert' && (
                   <>
                     Health alert on{' '}
-                    <span className="text-primary font-semibold">{item.target}</span>
+                    <span className="font-semibold text-primary">{item.target}</span>
                   </>
                 )}
                 {item.type === 'report' && (
                   <>
                     Report{' '}
-                    <span className="font-semibold">{item.target}</span>
+                    <span className="font-semibold text-foreground">{item.target}</span>
                     {' '}generated
                   </>
                 )}
               </p>
-              <p className="text-xs text-muted-foreground truncate">{item.description}</p>
+              <p className="text-xs text-muted-foreground/70 mt-0.5 truncate leading-relaxed">{item.description}</p>
             </div>
 
             <time
               dateTime={item.timestamp}
-              className="text-xs text-muted-foreground tabular-nums shrink-0"
+              className="text-[11px] font-medium text-muted-foreground/50 tabular-nums shrink-0 pt-1"
               title={new Date(item.timestamp).toLocaleString('de-DE')}
             >
               {formatRelativeTime(item.timestamp)}
@@ -162,3 +188,4 @@ export function AuditActivityFeed({ items }: AuditActivityFeedProps): JSX.Elemen
     </ul>
   );
 }
+

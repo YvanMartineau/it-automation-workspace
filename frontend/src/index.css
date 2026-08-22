@@ -6,122 +6,279 @@
 
 @layer base {
   :root {
-    --background: 0 0% 100%;
-    --foreground: 224 71% 4%;
-    --card: 0 0% 100%;
-    --card-foreground: 224 71% 4%;
-    --popover: 0 0% 100%;
-    --popover-foreground: 224 71% 4%;
-    --primary: 221 83% 53%;
+    /* ═══════════════════════════════════════
+       FADED WHITE — Light Mode Design Tokens
+       Warm ivory base with cool slate accents
+       ═══════════════════════════════════════ */
+    --background: 40 20% 98%;
+    --foreground: 220 25% 10%;
+    --card: 40 30% 100%;
+    --card-foreground: 220 25% 10%;
+    --popover: 40 30% 100%;
+    --popover-foreground: 220 25% 10%;
+    --primary: 224 76% 48%;
     --primary-foreground: 0 0% 100%;
-    --secondary: 215 16% 47%;
-    --secondary-foreground: 0 0% 100%;
-    --muted: 215 16% 47%;
-    --muted-foreground: 215 16% 47%;
-    --accent: 210 40% 96.1%;
-    --accent-foreground: 222.2 47.4% 11.2%;
-    --destructive: 0 84% 60%;
+    --secondary: 220 14% 94%;
+    --secondary-foreground: 220 25% 18%;
+    --muted: 220 14% 96%;
+    --muted-foreground: 220 10% 48%;
+    --accent: 220 14% 96%;
+    --accent-foreground: 220 25% 18%;
+    --destructive: 0 72% 55%;
     --destructive-foreground: 0 0% 100%;
-    --border: 214.3 31.8% 91.4%;
-    --input: 214.3 31.8% 91.4%;
-    --ring: 221 83% 53%;
-    --radius: 0.5rem;
+    --border: 40 15% 92%;
+    --input: 40 15% 92%;
+    --ring: 224 76% 48%;
+    --radius: 0.625rem;
 
-        /* Sonner-specific semantic colors */
-    --success-bg: hsl(142 76% 96%);
-    --success-text: hsl(142 76% 36%);
-    --success-border: hsl(142 76% 86%);
+    /* Semantic Status Colors — Premium Muted Palette */
+    --success: 150 60% 42%;
+    --success-foreground: 0 0% 100%;
+    --warning: 35 90% 48%;
+    --warning-foreground: 0 0% 100%;
+    --danger: 0 72% 55%;
+    --danger-foreground: 0 0% 100%;
+    --info: 199 85% 48%;
+    --info-foreground: 0 0% 100%;
+
+    /* Sonner-specific semantic colors */
+    --success-bg: hsl(150 60% 96%);
+    --success-text: hsl(150 60% 35%);
+    --success-border: hsl(150 60% 88%);
     
-    --error-bg: hsl(0 84% 97%);
-    --error-text: hsl(0 84% 60%);
-    --error-border: hsl(0 84% 90%);
+    --error-bg: hsl(0 72% 97%);
+    --error-text: hsl(0 72% 50%);
+    --error-border: hsl(0 72% 90%);
     
-    --warning-bg: hsl(38 92% 96%);
-    --warning-text: hsl(38 92% 50%);
-    --warning-border: hsl(38 92% 85%);
+    --warning-bg: hsl(35 90% 96%);
+    --warning-text: hsl(35 90% 42%);
+    --warning-border: hsl(35 90% 88%);
     
-    --info-bg: hsl(199 89% 96%);
-    --info-text: hsl(199 89% 48%);
-    --info-border: hsl(199 89% 85%);
+    --info-bg: hsl(199 85% 96%);
+    --info-text: hsl(199 85% 42%);
+    --info-border: hsl(199 85% 88%);
+
+    /* Glassmorphism & Surface */
+    --glass-bg: hsl(40 30% 100% / 0.72);
+    --glass-border: hsl(40 15% 88% / 0.6);
+    --surface-elevated: 0 0% 100%;
   }
 
   .dark {
-    --background: 224 71% 4%;
-    --foreground: 0 0% 100%;
-    --card: 224 71% 4%;
-    --card-foreground: 0 0% 100%;
-    --popover: 224 71% 4%;
-    --popover-foreground: 0 0% 100%;
-    --primary: 221 83% 53%;
+    /* ═══════════════════════════════════════
+       Deep Ink — Dark Mode Design Tokens
+       Rich charcoal with warm accent potential
+       ═══════════════════════════════════════ */
+    --background: 220 20% 6%;
+    --foreground: 40 20% 96%;
+    --card: 220 18% 10%;
+    --card-foreground: 40 20% 96%;
+    --popover: 220 18% 10%;
+    --popover-foreground: 40 20% 96%;
+    --primary: 224 76% 58%;
     --primary-foreground: 0 0% 100%;
-    --secondary: 215 16% 47%;
-    --secondary-foreground: 0 0% 100%;
-    --muted: 215 16% 47%;
-    --muted-foreground: 215 16% 47%;
-    --accent: 216 34% 17%;
-    --accent-foreground: 0 0% 100%;
-    --destructive: 0 84% 60%;
+    --secondary: 220 14% 16%;
+    --secondary-foreground: 40 20% 90%;
+    --muted: 220 14% 16%;
+    --muted-foreground: 220 10% 55%;
+    --accent: 220 14% 16%;
+    --accent-foreground: 40 20% 96%;
+    --destructive: 0 72% 60%;
     --destructive-foreground: 0 0% 100%;
-    --border: 216 34% 17%;
-    --input: 216 34% 17%;
-    --ring: 221 83% 53%;
+    --border: 220 15% 18%;
+    --input: 220 15% 18%;
+    --ring: 224 76% 58%;
 
-        /* Dark mode Sonner colors */
-    --success-bg: hsl(142 76% 14%);
-    --success-text: hsl(142 76% 60%);
-    --success-border: hsl(142 76% 24%);
+    /* Semantic Status Colors — Dark Mode */
+    --success: 150 60% 55%;
+    --success-foreground: 220 20% 6%;
+    --warning: 35 90% 58%;
+    --warning-foreground: 220 20% 6%;
+    --danger: 0 72% 65%;
+    --danger-foreground: 220 20% 6%;
+    --info: 199 85% 58%;
+    --info-foreground: 220 20% 6%;
+
+    /* Dark mode Sonner colors */
+    --success-bg: hsl(150 60% 12%);
+    --success-text: hsl(150 60% 65%);
+    --success-border: hsl(150 60% 20%);
     
-    --error-bg: hsl(0 84% 10%);
-    --error-text: hsl(0 84% 70%);
-    --error-border: hsl(0 84% 20%);
+    --error-bg: hsl(0 72% 10%);
+    --error-text: hsl(0 72% 70%);
+    --error-border: hsl(0 72% 20%);
     
-    --warning-bg: hsl(38 92% 14%);
-    --warning-text: hsl(38 92% 60%);
-    --warning-border: hsl(38 92% 24%);
+    --warning-bg: hsl(35 90% 12%);
+    --warning-text: hsl(35 90% 65%);
+    --warning-border: hsl(35 90% 20%);
     
-    --info-bg: hsl(199 89% 14%);
-    --info-text: hsl(199 89% 60%);
-    --info-border: hsl(199 89% 24%);
+    --info-bg: hsl(199 85% 12%);
+    --info-text: hsl(199 85% 65%);
+    --info-border: hsl(199 85% 20%);
+
+    /* Glassmorphism & Surface — Dark */
+    --glass-bg: hsl(220 18% 10% / 0.72);
+    --glass-border: hsl(220 15% 20% / 0.5);
+    --surface-elevated: 220 18% 12%;
   }
 
   body {
     background-color: hsl(var(--background));
     color: hsl(var(--foreground));
     font-family: "Geist Variable", system-ui, sans-serif;
-    font-feature-settings: "rlig" 1, "calt" 1;
+    font-feature-settings: "rlig" 1, "calt" 1, "ss01" 1;
     -webkit-font-smoothing: antialiased;
     -moz-osx-font-smoothing: grayscale;
+    text-rendering: optimizeLegibility;
+  }
 
-    /* Force Sonner semantic backgrounds */
-    [data-sonner-toast][data-type="success"] {
-      background: var(--success-bg) !important;
-      border-color: var(--success-border) !important;
-      color: var(--success-text) !important;
-    }
+  /* Premium selection color */
+  ::selection {
+    background-color: hsl(var(--primary) / 0.18);
+    color: hsl(var(--foreground));
+  }
 
-    [data-sonner-toast][data-type="error"] {
-      background: var(--error-bg) !important;
-      border-color: var(--error-border) !important;
-      color: var(--error-text) !important;
-    }
+  /* Scrollbar styling */
+  ::-webkit-scrollbar {
+    width: 6px;
+    height: 6px;
+  }
+  ::-webkit-scrollbar-track {
+    background: transparent;
+  }
+  ::-webkit-scrollbar-thumb {
+    background: hsl(var(--muted-foreground) / 0.2);
+    border-radius: 999px;
+  }
+  ::-webkit-scrollbar-thumb:hover {
+    background: hsl(var(--muted-foreground) / 0.35);
+  }
 
-    [data-sonner-toast][data-type="warning"] {
-      background: var(--warning-bg) !important;
-      border-color: var(--warning-border) !important;
-      color: var(--warning-text) !important;
-    }
+  /* Force Sonner semantic backgrounds */
+  [data-sonner-toast][data-type="success"] {
+    background: var(--success-bg) !important;
+    border-color: var(--success-border) !important;
+    color: var(--success-text) !important;
+  }
 
-    [data-sonner-toast][data-type="info"] {
-      background: var(--info-bg) !important;
-      border-color: var(--info-border) !important;
-      color: var(--info-text) !important;
-    }
+  [data-sonner-toast][data-type="error"] {
+    background: var(--error-bg) !important;
+    border-color: var(--error-border) !important;
+    color: var(--error-text) !important;
+  }
 
-    /* Close button inherits toast color */
-    [data-sonner-toast] [data-close-button] {
-      color: currentColor !important;
-      background: transparent !important;
-      border: none !important;
-    }
+  [data-sonner-toast][data-type="warning"] {
+    background: var(--warning-bg) !important;
+    border-color: var(--warning-border) !important;
+    color: var(--warning-text) !important;
+  }
+
+  [data-sonner-toast][data-type="info"] {
+    background: var(--info-bg) !important;
+    border-color: var(--info-border) !important;
+    color: var(--info-text) !important;
+  }
+
+  /* Close button inherits toast color */
+  [data-sonner-toast] [data-close-button] {
+    color: currentColor !important;
+    background: transparent !important;
+    border: none !important;
   }
 }
+
+@layer components {
+  /* Premium card surface */
+  .surface-premium {
+    background: hsl(var(--card));
+    border: 1px solid hsl(var(--border));
+    box-shadow: 
+      0 1px 3px 0 rgb(0 0 0 / 0.04), 
+      0 1px 2px -1px rgb(0 0 0 / 0.04), 
+      0 0 0 1px rgb(0 0 0 / 0.02),
+      inset 0 1px 0 0 rgb(255 255 255 / 0.6);
+    transition: box-shadow 0.3s cubic-bezier(0.23, 1, 0.32, 1), transform 0.3s cubic-bezier(0.23, 1, 0.32, 1);
+  }
+  
+  .dark .surface-premium {
+    box-shadow: 
+      0 1px 3px 0 rgb(0 0 0 / 0.15), 
+      0 0 0 1px rgb(255 255 255 / 0.03),
+      inset 0 1px 0 0 rgb(255 255 255 / 0.05);
+  }
+
+  .surface-premium:hover {
+    box-shadow: 
+      0 4px 6px -1px rgb(0 0 0 / 0.05), 
+      0 2px 4px -2px rgb(0 0 0 / 0.05), 
+      0 0 0 1px rgb(0 0 0 / 0.03),
+      inset 0 1px 0 0 rgb(255 255 255 / 0.6);
+    transform: translateY(-1px);
+  }
+
+  .dark .surface-premium:hover {
+    box-shadow: 
+      0 4px 6px -1px rgb(0 0 0 / 0.25), 
+      0 0 0 1px rgb(255 255 255 / 0.04),
+      inset 0 1px 0 0 rgb(255 255 255 / 0.05);
+  }
+
+  /* Gradient text utility */
+  .text-gradient {
+    background: linear-gradient(135deg, hsl(var(--foreground)) 0%, hsl(var(--muted-foreground)) 100%);
+    -webkit-background-clip: text;
+    -webkit-text-fill-color: transparent;
+    background-clip: text;
+  }
+
+  .dark .text-gradient {
+    background: linear-gradient(135deg, hsl(var(--foreground)) 0%, hsl(var(--muted-foreground)) 100%);
+    -webkit-background-clip: text;
+    -webkit-text-fill-color: transparent;
+    background-clip: text;
+  }
+
+  /* Accent gradient text */
+  .text-gradient-primary {
+    background: linear-gradient(135deg, hsl(var(--primary)) 0%, hsl(250 80% 60%) 100%);
+    -webkit-background-clip: text;
+    -webkit-text-fill-color: transparent;
+    background-clip: text;
+  }
+
+  /* Subtle ambient glow behind elements */
+  .ambient-glow {
+    position: relative;
+  }
+  .ambient-glow::before {
+    content: "";
+    position: absolute;
+    inset: -1px;
+    border-radius: inherit;
+    background: linear-gradient(135deg, hsl(var(--primary) / 0.08), transparent 60%);
+    z-index: -1;
+    pointer-events: none;
+    opacity: 0;
+    transition: opacity 0.4s ease;
+  }
+  .ambient-glow:hover::before {
+    opacity: 1;
+  }
+
+  /* Glass header */
+  .glass-header {
+    background: hsl(var(--glass-bg));
+    backdrop-filter: blur(16px) saturate(1.4);
+    -webkit-backdrop-filter: blur(16px) saturate(1.4);
+    border-bottom: 1px solid hsl(var(--glass-border));
+  }
+
+  /* Staggered animation delays for lists */
+  .stagger-1 { animation-delay: 0.05s; opacity: 0; }
+  .stagger-2 { animation-delay: 0.1s; opacity: 0; }
+  .stagger-3 { animation-delay: 0.15s; opacity: 0; }
+  .stagger-4 { animation-delay: 0.2s; opacity: 0; }
+  .stagger-5 { animation-delay: 0.25s; opacity: 0; }
+  .stagger-6 { animation-delay: 0.3s; opacity: 0; }
+}
+

@@ -1,6 +1,6 @@
 /**
- * @fileoverview Quick action grid for common dashboard tasks.
- * Provides one-tap access to high-frequency operations.
+ * @fileoverview Quick action grid — Premium Edition.
+ * Refined hover states, gradient icon containers, and subtle lift.
  */
 
 import { Monitor, UserPlus, FileText, Bell, type LucideIcon } from 'lucide-react';
@@ -24,28 +24,32 @@ const iconRegistry: Record<string, LucideIcon> = {
 
 const variantConfig = {
   primary: {
-    hoverBorder: 'hover:border-primary',
-    hoverBg: 'hover:bg-primary/5',
-    iconBg: 'bg-primary/10',
+    gradient: 'from-primary/12 to-primary/4',
     iconColor: 'text-primary',
+    ring: 'ring-primary/15',
+    hoverBorder: 'group-hover:border-primary/30',
+    hoverGlow: 'group-hover:shadow-glow-primary',
   },
   success: {
-    hoverBorder: 'hover:border-success',
-    hoverBg: 'hover:bg-success/5',
-    iconBg: 'bg-success/10',
+    gradient: 'from-success/12 to-success/4',
     iconColor: 'text-success',
+    ring: 'ring-success/15',
+    hoverBorder: 'group-hover:border-success/30',
+    hoverGlow: 'group-hover:shadow-glow-success',
   },
   warning: {
-    hoverBorder: 'hover:border-warning',
-    hoverBg: 'hover:bg-warning/5',
-    iconBg: 'bg-warning/10',
+    gradient: 'from-warning/12 to-warning/4',
     iconColor: 'text-warning',
+    ring: 'ring-warning/15',
+    hoverBorder: 'group-hover:border-warning/30',
+    hoverGlow: 'group-hover:shadow-glow-warning',
   },
   info: {
-    hoverBorder: 'hover:border-info',
-    hoverBg: 'hover:bg-info/5',
-    iconBg: 'bg-info/10',
+    gradient: 'from-info/12 to-info/4',
     iconColor: 'text-info',
+    ring: 'ring-info/15',
+    hoverBorder: 'group-hover:border-info/30',
+    hoverGlow: 'group-hover:shadow-glow-primary',
   },
 };
 
@@ -74,25 +78,32 @@ export function QuickActions({ actions }: QuickActionsProps): JSX.Element {
             key={action.id}
             href={action.href}
             className={cn(
-              'flex items-center gap-3 p-4 rounded-lg border bg-card',
-              'transition-all duration-200',
-              'focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary focus-visible:ring-offset-2',
+              'group relative flex items-center gap-3.5 rounded-xl border border-border/80 bg-card p-4',
+              'shadow-card dark:shadow-card-dark',
+              'transition-all duration-300 ease-premium',
+              'hover:-translate-y-0.5 hover:shadow-card-hover dark:hover:shadow-card-dark-hover',
+              'focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2',
               config.hoverBorder,
-              config.hoverBg
+              config.hoverGlow
             )}
           >
             <div
               className={cn(
-                'h-10 w-10 rounded-full flex items-center justify-center shrink-0',
-                config.iconBg
+                'flex h-10 w-10 shrink-0 items-center justify-center rounded-xl',
+                'bg-gradient-to-br',
+                config.gradient,
+                'ring-1',
+                config.ring,
+                'transition-transform duration-300 ease-premium',
+                'group-hover:scale-105'
               )}
               aria-hidden="true"
             >
               <Icon className={cn('h-5 w-5', config.iconColor)} />
             </div>
             <div className="min-w-0">
-              <p className="text-sm font-medium">{action.label}</p>
-              <p className="text-xs text-muted-foreground truncate">{action.description}</p>
+              <p className="text-sm font-semibold text-foreground/90">{action.label}</p>
+              <p className="text-xs text-muted-foreground/70 truncate mt-0.5">{action.description}</p>
             </div>
           </a>
         );
