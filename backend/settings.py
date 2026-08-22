@@ -62,11 +62,11 @@ class Settings(BaseSettings):
     N8N_CALLBACK_SECRET: str = ""
 
     # Gmail OAuth2
-    #GMAIL_OAUTH_CLIENT_ID: str
-    #GMAIL_OAUTH_CLIENT_SECRET: str
-    #GMAIL_OAUTH_REFRESH_TOKEN: str
-    #GMAIL_SENDER_ADDRESS: str
-    #ADMIN_ALERT_EMAIL: str
+    GMAIL_OAUTH_CLIENT_ID: str
+    GMAIL_OAUTH_CLIENT_SECRET: str
+    GMAIL_OAUTH_REFRESH_TOKEN: str
+    GMAIL_SENDER_ADDRESS: str
+    #ADMIN_ALERT_EMAIL: str #Not Yet Implemented
 
     # App
     FRONTEND_URL: str = "http://localhost:5173"
