@@ -1,10 +1,10 @@
 // src/pages/Onboarding.tsx
-import { useOnboardingList } from "#/hooks/useOnboarding";
+import { useOnboardingList, useWatchedJobIds } from "#/hooks/useOnboarding";
 import { OnboardingCard } from "#/components/onboarding/OnboardingCard";
 import { OnboardingFormDialog } from "#/components/onboarding/OnboardingFormDialog";
 import { OnboardingJobStreamSubscriber } from "#/components/onboarding/OnboardingJobStreamSubscriber";
 import { TableSkeleton } from "#/components/feedback/TableSkeleton";
-import type { OnboardedUserListItem, OnboardingWorkflowStatus } from "#/types/onboarding";
+import type { OnboardingWorkflowStatus } from "#/types/onboarding";
 
 const COLUMNS: { id: OnboardingWorkflowStatus | "ALL"; label: string }[] = [
   { id: "ALL", label: "Alle" },
@@ -16,23 +16,17 @@ const COLUMNS: { id: OnboardingWorkflowStatus | "ALL"; label: string }[] = [
   { id: "FAILED", label: "Fehlgeschlagen" },
 ];
 
-const isStreamable = (r: OnboardedUserListItem): r is OnboardedUserListItem & { job_id: string } =>
-  !!r.job_id && !r.job_id.startsWith("temp-job-");
-
 export default function OnboardingPage() {
   const { data: records, isLoading, isError } = useOnboardingList();
+  const { data: watchedJobIds = [] } = useWatchedJobIds();
 
   if (isLoading) return <TableSkeleton rows={4} columns={4} />;
   if (isError) return <div className="p-6 text-danger">Fehler beim Laden der Onboarding-Daten.</div>;
 
-  const activeJobs = (records ?? []).filter(
-    (r) => isStreamable(r) && r.workflow_status !== "COMPLETED" && r.workflow_status !== "FAILED"
-  );
-
   return (
     <div className="p-6 space-y-6">
-      {activeJobs.map((r) => (
-        <OnboardingJobStreamSubscriber key={r.job_id} jobId={r.job_id as string} active />
+      {watchedJobIds.map((jobId) => (
+        <OnboardingJobStreamSubscriber key={jobId} jobId={jobId} active />
       ))}
 
       <div className="flex justify-between items-center">

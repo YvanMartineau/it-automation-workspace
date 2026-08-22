@@ -155,11 +155,9 @@ export function OnboardingCard({ record }: OnboardingCardProps) {
 
         {canOffboard && (
           <Dialog open={confirmOpen} onOpenChange={setConfirmOpen}>
-            <DialogTrigger>
-              <Button size="sm" variant="outline" className="w-full text-danger hover:text-danger">
-                <UserMinus className="mr-2 h-4 w-4" />
-                Offboarden
-              </Button>
+            <DialogTrigger className="inline-flex w-full items-center justify-center gap-2 whitespace-nowrap rounded-md border border-input bg-background h-9 px-3 text-sm font-medium text-danger ring-offset-background transition-colors hover:bg-accent hover:text-danger focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 disabled:pointer-events-none disabled:opacity-50">
+              <UserMinus className="h-4 w-4" />
+              Offboarden
             </DialogTrigger>
             <DialogContent className="sm:max-w-[420px]">
               <DialogHeader>

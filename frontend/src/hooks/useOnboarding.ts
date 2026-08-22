@@ -1,5 +1,5 @@
 // src/hooks/useOnboarding.ts
-import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
+import { useQuery, useMutation, useQueryClient, type QueryClient } from "@tanstack/react-query";
 import { useEffect, useRef } from "react";
 import { api } from "#/lib/api";
 import { useAuthStore } from "#/hooks/useAuth";
@@ -19,13 +19,40 @@ export const useOnboardingList = () => {
       const response = await api.get<OnboardedUserListItem[]>("/onboard");
       return response.data;
     },
-    // Safety-net poll only — while a job is in flight, its card gets live
-    // updates from useOnboardingJobStream (SSE) instead. This interval
-    // just covers a dropped stream (backgrounded tab, network blip) or a
-    // job that was already running before this session started.
+    // Safety-net poll for everything NOT actively streamed (other admins'
+    // jobs, jobs from before this session). Actively-watched jobs get
+    // live updates from useOnboardingJobStream instead.
     refetchInterval: 20000,
   });
 };
+
+// --- Watched-job-ids: a client-only cache slot, not a server query ---
+// Holds only job_ids we ourselves just created/retried THIS session.
+// That's the one case where the in-memory job_store on the backend is
+// guaranteed to actually have the job — anything discovered from the
+// list endpoint on page load might predate a server restart and 404
+// forever, which is exactly what was flooding the console.
+const WATCHED_JOBS_KEY = ["onboard", "watchedJobIds"] as const;
+
+function addWatchedJob(queryClient: QueryClient, jobId: string) {
+  queryClient.setQueryData<string[]>(WATCHED_JOBS_KEY, (prev = []) =>
+    prev.includes(jobId) ? prev : [...prev, jobId]
+  );
+}
+
+function removeWatchedJob(queryClient: QueryClient, jobId: string) {
+  queryClient.setQueryData<string[]>(WATCHED_JOBS_KEY, (prev = []) => prev.filter((id) => id !== jobId));
+}
+
+export function useWatchedJobIds() {
+  return useQuery<string[]>({
+    queryKey: WATCHED_JOBS_KEY,
+    queryFn: () => [],
+    initialData: [],
+    staleTime: Infinity,
+    gcTime: Infinity,
+  });
+}
 
 export const useCreateOnboarding = () => {
   const queryClient = useQueryClient();
@@ -61,8 +88,9 @@ export const useCreateOnboarding = () => {
       toast.error("Fehler beim Erstellen des Onboarding-Vorgangs.");
     },
 
-    onSuccess: () => {
+    onSuccess: (data) => {
       toast.success("Onboarding-Vorgang erfolgreich gestartet.");
+      addWatchedJob(queryClient, data.job_id);
       queryClient.invalidateQueries({ queryKey: ["onboard", "list"] });
     },
   });
@@ -75,8 +103,9 @@ export const useRetryOnboarding = () => {
     mutationFn: (jobId: string) =>
       api.post<OnboardJobStarted>(`/onboard/jobs/${jobId}/retry`).then((res) => res.data),
 
-    onSuccess: () => {
+    onSuccess: (data) => {
       toast.info("Onboarding-Schritt wird erneut ausgeführt...");
+      addWatchedJob(queryClient, data.job_id);
       queryClient.invalidateQueries({ queryKey: ["onboard", "list"] });
     },
 
@@ -113,18 +142,17 @@ export const useOffboardUser = () => {
 
 interface OnboardingJobStreamEvent {
   status: string;
-  data?: { error?: string | null } & Record<string, unknown>;
+  data?: Record<string, unknown>;
 }
 
 /**
  * Subscribes to GET /onboard/jobs/{jobId}/stream (SSE) and patches the
- * matching record's workflow_status/error_message directly into the
- * ["onboard","list"] query cache as events arrive.
- *
- * Uses a manual fetch + ReadableStream reader instead of `EventSource`
- * because EventSource can't attach an Authorization header, and this
- * app's access token lives in memory rather than a cookie (see the note
- * in lib/api.ts) — this mirrors that file's Bearer-token attachment.
+ * matching record's workflow_status/error_message into the
+ * ["onboard","list"] cache as events arrive. Removes jobId from the
+ * watched list on a terminal status OR a 404 (job no longer exists in
+ * the backend's in-memory store — most likely a server restart since
+ * this job was created), so a dead job_id is never retried on the next
+ * mount.
  */
 export function useOnboardingJobStream(jobId: string | null | undefined, active: boolean) {
   const queryClient = useQueryClient();
@@ -143,14 +171,13 @@ export function useOnboardingJobStream(jobId: string | null | undefined, active:
             ? {
                 ...r,
                 workflow_status: event.status as OnboardingWorkflowStatus,
-                error_message: event.data?.error ?? r.error_message,
+                error_message: (event.data?.error as string | undefined) ?? r.error_message,
               }
             : r
         ) ?? prev
       );
       if (event.status === "COMPLETED" || event.status === "FAILED") {
-        // Stream only carries status + error — refetch from Postgres to
-        // pick up anything else that changed (external_id, etc).
+        removeWatchedJob(queryClient, jobId);
         queryClient.invalidateQueries({ queryKey: ["onboard", "list"] });
       }
     };
@@ -163,6 +190,13 @@ export function useOnboardingJobStream(jobId: string | null | undefined, active:
           credentials: "include",
           signal: controller.signal,
         });
+
+        if (response.status === 404) {
+          // Job doesn't exist server-side (stale / pre-restart) — stop
+          // trying on future mounts instead of repeating this forever.
+          if (jobId) removeWatchedJob(queryClient, jobId);
+          return;
+        }
         if (!response.ok || !response.body) return;
 
         const reader = response.body.getReader();

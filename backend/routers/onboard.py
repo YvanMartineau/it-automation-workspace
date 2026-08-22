@@ -52,7 +52,7 @@ async def onboard_user(body: OnboardRequest, background_tasks: BackgroundTasks, 
     return OnboardJobStarted(job_id=job.job_id, status=job.status)
 
 @router.get("/jobs/{job_id}/stream", summary="Stream onboarding progress")
-async def stream_onboarding_progress(job_id: str, current_user: User = Depends(get_current_user)):
+async def stream_onboarding_progress(job_id: str, current_user: User = Depends(get_admin_user)):
     job = get_job(job_id)
     if job is None:
         raise HTTPException(status_code=404, detail="Unknown job_id")

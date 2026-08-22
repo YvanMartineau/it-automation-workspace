@@ -63,11 +63,13 @@ async def run_onboarding_pipeline(job_id, *, user_id, actor_email, first_name, l
                                    payload={"department": provisioned.department, "provisioning_source": provisioned.provisioning_source})
             await db.commit()
 
+            # temporary_password is still generated and still sent to n8n below; it's
+            # just no longer written into job.data, so it can never come back out of
+            # the stream, on this call or any later one, ever.
             await update_job_status(job_id, "EMAIL_SENDING", {
                 "user_id": str(provisioned.user_id), "external_id": provisioned.external_id,
                 "email": provisioned.email, "department": provisioned.department,
                 "job_title": provisioned.job_title, "provisioning_source": provisioned.provisioning_source,
-                "temporary_password": temporary_password,
             })
 
             dispatched = await trigger_onboarding_workflow({
@@ -125,7 +127,7 @@ async def resume_onboarding_pipeline(job_id: str, *, user_id, actor_email: str) 
             await update_job_status(job_id, "EMAIL_SENDING", {
                 "user_id": str(record.id), "external_id": record.external_id, "email": record.email,
                 "department": record.department, "job_title": record.job_title,
-                "provisioning_source": record.provisioning_source.value, "temporary_password": temporary_password,
+                "provisioning_source": record.provisioning_source.value,
             })
 
             dispatched = await trigger_onboarding_workflow({
