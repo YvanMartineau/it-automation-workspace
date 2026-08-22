@@ -2,8 +2,9 @@
 import { useOnboardingList } from "#/hooks/useOnboarding";
 import { OnboardingCard } from "#/components/onboarding/OnboardingCard";
 import { OnboardingFormDialog } from "#/components/onboarding/OnboardingFormDialog";
+import { OnboardingJobStreamSubscriber } from "#/components/onboarding/OnboardingJobStreamSubscriber";
 import { TableSkeleton } from "#/components/feedback/TableSkeleton";
-import type { OnboardingWorkflowStatus } from "#/types/onboarding";
+import type { OnboardedUserListItem, OnboardingWorkflowStatus } from "#/types/onboarding";
 
 const COLUMNS: { id: OnboardingWorkflowStatus | "ALL"; label: string }[] = [
   { id: "ALL", label: "Alle" },
@@ -15,14 +16,25 @@ const COLUMNS: { id: OnboardingWorkflowStatus | "ALL"; label: string }[] = [
   { id: "FAILED", label: "Fehlgeschlagen" },
 ];
 
+const isStreamable = (r: OnboardedUserListItem): r is OnboardedUserListItem & { job_id: string } =>
+  !!r.job_id && !r.job_id.startsWith("temp-job-");
+
 export default function OnboardingPage() {
   const { data: records, isLoading, isError } = useOnboardingList();
 
   if (isLoading) return <TableSkeleton rows={4} columns={4} />;
   if (isError) return <div className="p-6 text-danger">Fehler beim Laden der Onboarding-Daten.</div>;
 
+  const activeJobs = (records ?? []).filter(
+    (r) => isStreamable(r) && r.workflow_status !== "COMPLETED" && r.workflow_status !== "FAILED"
+  );
+
   return (
     <div className="p-6 space-y-6">
+      {activeJobs.map((r) => (
+        <OnboardingJobStreamSubscriber key={r.job_id} jobId={r.job_id as string} active />
+      ))}
+
       <div className="flex justify-between items-center">
         <div>
           <h1 className="text-2xl font-semibold tracking-tight">Onboarding Tracker</h1>
@@ -33,11 +45,10 @@ export default function OnboardingPage() {
         <OnboardingFormDialog />
       </div>
 
-      {/* Hybrid Kanban Board Layout */}
       <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-6">
-        {COLUMNS.filter(col => col.id !== "ALL").map((column) => {
-          const columnRecords = records?.filter((r) => r.job_status === column.id) || [];
-          
+        {COLUMNS.filter((col) => col.id !== "ALL").map((column) => {
+          const columnRecords = records?.filter((r) => r.workflow_status === column.id) || [];
+
           return (
             <div key={column.id} className="space-y-3">
               <div className="flex items-center justify-between px-1">
@@ -48,16 +59,14 @@ export default function OnboardingPage() {
                   {columnRecords.length}
                 </span>
               </div>
-              
+
               <div className="space-y-4 min-h-[200px]">
                 {columnRecords.length === 0 ? (
                   <div className="border-2 border-dashed border-muted-foreground/20 rounded-lg p-6 text-center text-sm text-muted-foreground">
                     Keine Vorgänge
                   </div>
                 ) : (
-                  columnRecords.map((record) => (
-                    <OnboardingCard key={record.user_id} record={record} />
-                  ))
+                  columnRecords.map((record) => <OnboardingCard key={record.user_id} record={record} />)
                 )}
               </div>
             </div>

@@ -2,9 +2,10 @@
 import { Card, CardContent, CardHeader, CardTitle } from "#/components/ui/card";
 import { Badge } from "#/components/ui/badge";
 import { Button } from "#/components/ui/button";
-import { CheckCircle2, Circle, XCircle, Loader2, Terminal } from "lucide-react";
+import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger, DialogFooter } from "#/components/ui/dialog";
+import { CheckCircle2, Circle, XCircle, Loader2, Terminal, UserMinus } from "lucide-react";
 import type { OnboardedUserListItem, OnboardingWorkflowStatus } from "#/types/onboarding";
-import { useRetryOnboarding } from "#/hooks/useOnboarding";
+import { useRetryOnboarding, useOffboardUser } from "#/hooks/useOnboarding";
 import { useState } from "react";
 import { toast } from "sonner";
 
@@ -25,27 +26,26 @@ const statusConfig: Record<OnboardingWorkflowStatus, { color: string; icon: Reac
   FAILED: { color: "bg-danger/10 text-danger", icon: <XCircle className="h-4 w-4" /> },
 };
 
-// Dynamically generate mock n8n logs based on current job status
 const generateSimulationLog = (record: OnboardedUserListItem): string[] => {
   const logs: string[] = [];
   const name = `${record.first_name} ${record.last_name}`;
-  
-  if (record.job_status !== "PENDING") {
+
+  if (record.workflow_status !== "PENDING") {
     logs.push(`POST https://n8n.instance.com/webhook/onboard-start\nPayload: { "first_name": "${record.first_name}", "email": "${record.email}", "department": "${record.department}" }`);
   }
-  if (["AD_CREATING", "EMAIL_SENDING", "JIRA_CREATING", "COMPLETED"].includes(record.job_status)) {
+  if (["AD_CREATING", "EMAIL_SENDING", "JIRA_CREATING", "COMPLETED"].includes(record.workflow_status)) {
     logs.push(`POST https://n8n.instance.com/webhook/ad-create\nPayload: { "user": "${name}", "ou": "${record.department}", "source": "${record.provisioning_source}" }`);
   }
-  if (["EMAIL_SENDING", "JIRA_CREATING", "COMPLETED"].includes(record.job_status)) {
+  if (["EMAIL_SENDING", "JIRA_CREATING", "COMPLETED"].includes(record.workflow_status)) {
     logs.push(`POST https://n8n.instance.com/webhook/email-send\nPayload: { "to": "${record.email}", "template": "welcome" }`);
   }
-  if (["JIRA_CREATING", "COMPLETED"].includes(record.job_status)) {
+  if (["JIRA_CREATING", "COMPLETED"].includes(record.workflow_status)) {
     logs.push(`POST https://n8n.instance.com/webhook/jira-ticket\nPayload: { "summary": "IT Setup for ${name}", "priority": "High" }`);
   }
-  if (record.job_status === "FAILED" && record.error_message) {
+  if (record.workflow_status === "FAILED" && record.error_message) {
     logs.push(`\n❌ ERROR: ${record.error_message}`);
   }
-  
+
   return logs;
 };
 
@@ -55,14 +55,23 @@ interface OnboardingCardProps {
 
 export function OnboardingCard({ record }: OnboardingCardProps) {
   const retryMutation = useRetryOnboarding();
+  const offboardMutation = useOffboardUser();
   const [showLogs, setShowLogs] = useState(false);
-  const config = statusConfig[record.job_status];
+  const [confirmOpen, setConfirmOpen] = useState(false);
+  const config = statusConfig[record.workflow_status];
 
-  const currentStepIndex = STEPS.findIndex((s) => s.key === record.job_status);
-  const displaySteps = record.job_status === "FAILED" ? STEPS : STEPS.slice(0, currentStepIndex + 1);
+  const currentStepIndex = STEPS.findIndex((s) => s.key === record.workflow_status);
+  const displaySteps = record.workflow_status === "FAILED" ? STEPS : STEPS.slice(0, currentStepIndex + 1);
+
+  const isOffboarded = record.status === "offboarded";
+  const canOffboard = !isOffboarded && record.workflow_status === "COMPLETED";
+
+  const handleOffboardConfirm = () => {
+    offboardMutation.mutate(record.user_id, { onSuccess: () => setConfirmOpen(false) });
+  };
 
   return (
-    <Card className="hover:shadow-md transition-shadow border-l-4 border-l-primary/50">
+    <Card className={`hover:shadow-md transition-shadow border-l-4 ${isOffboarded ? "border-l-muted-foreground/40 opacity-70" : "border-l-primary/50"}`}>
       <CardHeader className="pb-3">
         <div className="flex justify-between items-start">
           <div>
@@ -70,24 +79,31 @@ export function OnboardingCard({ record }: OnboardingCardProps) {
             <p className="text-sm text-muted-foreground mt-1">{record.job_title} • {record.department}</p>
             <p className="text-xs text-muted-foreground/70 mt-0.5">{record.email}</p>
           </div>
-          <Badge variant="outline" className={`${config.color} border-0 flex items-center gap-1.5`}>
-            {config.icon}
-            {record.job_status === "FAILED" ? "Fehlgeschlagen" : record.job_status.replace("_", " ")}
-          </Badge>
+          <div className="flex flex-col items-end gap-1.5">
+            <Badge variant="outline" className={`${config.color} border-0 flex items-center gap-1.5`}>
+              {config.icon}
+              {record.workflow_status === "FAILED" ? "Fehlgeschlagen" : record.workflow_status.replace("_", " ")}
+            </Badge>
+            {isOffboarded && (
+              <Badge variant="outline" className="bg-muted text-muted-foreground border-0 flex items-center gap-1.5">
+                <UserMinus className="h-3.5 w-3.5" />
+                Offboarded
+              </Badge>
+            )}
+          </div>
         </div>
       </CardHeader>
-      
+
       <CardContent className="space-y-4">
-        {/* Vertical Step Indicator */}
         <div className="space-y-2">
           {displaySteps.map((step, idx) => {
-            const isCompleted = idx < currentStepIndex && record.job_status !== "FAILED";
-            const isCurrent = idx === currentStepIndex && record.job_status !== "FAILED";
-            
+            const isCompleted = idx < currentStepIndex && record.workflow_status !== "FAILED";
+            const isCurrent = idx === currentStepIndex && record.workflow_status !== "FAILED";
+
             return (
               <div key={step.key} className="flex items-center gap-3 text-sm">
                 <div className={`flex-shrink-0 w-5 h-5 rounded-full flex items-center justify-center border ${
-                  isCompleted ? "bg-success border-success text-white" : 
+                  isCompleted ? "bg-success border-success text-white" :
                   isCurrent ? "border-primary text-primary" : "border-muted-foreground/30 text-muted-foreground"
                 }`}>
                   {isCompleted ? <CheckCircle2 className="h-3.5 w-3.5" /> : <div className="w-2 h-2 rounded-full bg-current" />}
@@ -100,9 +116,8 @@ export function OnboardingCard({ record }: OnboardingCardProps) {
           })}
         </div>
 
-        {/* Simulation Log Panel */}
         <div className="border rounded-md overflow-hidden">
-          <button 
+          <button
             onClick={() => setShowLogs(!showLogs)}
             className="w-full flex items-center justify-between px-3 py-2 bg-muted/50 hover:bg-muted transition-colors text-xs font-mono text-muted-foreground"
             aria-expanded={showLogs}
@@ -120,10 +135,9 @@ export function OnboardingCard({ record }: OnboardingCardProps) {
           )}
         </div>
 
-        {/* Retry Action */}
-        {record.job_status === "FAILED" && (
-          <Button 
-            size="sm" 
+        {record.workflow_status === "FAILED" && (
+          <Button
+            size="sm"
             className="w-full"
             onClick={() => {
               if (!record.job_id) {
@@ -137,6 +151,35 @@ export function OnboardingCard({ record }: OnboardingCardProps) {
             {retryMutation.isPending ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : null}
             Vorgang wiederholen
           </Button>
+        )}
+
+        {canOffboard && (
+          <Dialog open={confirmOpen} onOpenChange={setConfirmOpen}>
+            <DialogTrigger>
+              <Button size="sm" variant="outline" className="w-full text-danger hover:text-danger">
+                <UserMinus className="mr-2 h-4 w-4" />
+                Offboarden
+              </Button>
+            </DialogTrigger>
+            <DialogContent className="sm:max-w-[420px]">
+              <DialogHeader>
+                <DialogTitle>Zugriff widerrufen?</DialogTitle>
+              </DialogHeader>
+              <p className="text-sm text-muted-foreground">
+                Dadurch wird der Verzeichniszugriff für {record.first_name} {record.last_name} widerrufen.
+                Dies ist eine Soft-Delete-Operation und kein harter Löschvorgang.
+              </p>
+              <DialogFooter className="pt-2">
+                <Button variant="outline" onClick={() => setConfirmOpen(false)} disabled={offboardMutation.isPending}>
+                  Abbrechen
+                </Button>
+                <Button variant="destructive" onClick={handleOffboardConfirm} disabled={offboardMutation.isPending}>
+                  {offboardMutation.isPending ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : null}
+                  Ja, offboarden
+                </Button>
+              </DialogFooter>
+            </DialogContent>
+          </Dialog>
         )}
       </CardContent>
     </Card>
