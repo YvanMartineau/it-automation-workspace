@@ -27,6 +27,7 @@ from models.device import Device
 from models.audit_log import AuditLog
 from models.onboarded_user import OnboardedUser
 from models.report_log import ReportLog
+from models.device_health_history import DeviceHealthHistory
 # add each new model import here as you build more
 config.set_main_option("sqlalchemy.url", get_settings().DEV_DATABASE_URL)
 

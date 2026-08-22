@@ -14,7 +14,7 @@ from core.logging_config import setup_logging
 from settings import get_settings
 from security.rate_limiter import limiter
 from services.scheduler import start_scheduler, stop_scheduler
-from routers import auth, devices, audit, scan, onboard, reports
+from routers import auth, devices, audit, scan, onboard, reports, dashboard
 
 settings = get_settings()
 
@@ -58,6 +58,7 @@ def create_app() -> FastAPI:
     app.include_router(scan.router)
     app.include_router(onboard.router)
     app.include_router(reports.router)
+    app.include_router(dashboard.router)
     app.include_router(audit.router, prefix="/audit-logs", tags=["audit"])
     
     @app.get("/health", tags=["health"])

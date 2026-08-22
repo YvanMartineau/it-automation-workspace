@@ -1,25 +1,46 @@
+"""
+Pydantic schemas for the aggregated dashboard snapshot.
+
+Field names are deliberately camelCase (literal names, not aliases) —
+same precedent as schemas/device.py's PaginationMeta: this is a
+hand-written envelope consumed directly by the dashboard's existing
+frontend types (frontend/src/lib/mock-data.ts), not something that will
+ever pass through openapi-typescript codegen, so matching the frontend's
+shape 1:1 avoids an alias/mapping layer in the TanStack Query hook.
+"""
+
 from datetime import datetime
+from typing import Literal
+
 from pydantic import BaseModel
 
+HealthStatus = Literal["healthy", "warning", "critical"]
+AuditActivityType = Literal["update", "create", "delete", "alert", "report"]
+
+
 class DashboardStats(BaseModel):
-    total_assets: int
-    total_assets_change: int
+    totalAssets: int
+    totalAssetsChange: int
     online: int
-    online_percentage: float
+    onlinePercentage: float
     offline: int
-    offline_change: int
-    health_alerts: int
-    critical_alerts: int
+    offlineChange: int
+    healthAlerts: int
+    criticalAlerts: int
+
 
 class HealthTrendPoint(BaseModel):
     date: str
     score: float
-    status: str
+    status: HealthStatus
+
 
 class OSDistributionItem(BaseModel):
     name: str
     count: int
     percentage: float
+    color: str
+
 
 class OnboardingVolumePoint(BaseModel):
     week: str
@@ -27,19 +48,21 @@ class OnboardingVolumePoint(BaseModel):
     inProgress: int
     failed: int
 
+
 class AuditActivityItem(BaseModel):
     id: str
-    type: str
+    type: AuditActivityType
     actor: str
     target: str
-    target_label: str
+    targetLabel: str
     description: str
     timestamp: datetime
 
+
 class DashboardSnapshot(BaseModel):
     stats: DashboardStats
-    health_trend: list[HealthTrendPoint]
-    os_distribution: list[OSDistributionItem]
-    onboarding_volume: list[OnboardingVolumePoint]
-    audit_activity: list[AuditActivityItem]
-    generated_at: datetime
+    healthTrend: list[HealthTrendPoint]
+    osDistribution: list[OSDistributionItem]
+    onboardingVolume: list[OnboardingVolumePoint]
+    auditActivity: list[AuditActivityItem]
+    generatedAt: datetime

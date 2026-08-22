@@ -4,11 +4,14 @@
  * recent audit activity, and quick actions. Built with strict TypeScript,
  * zero any types, and full WCAG 2.1 AA accessibility.
  *
- * @todo Replace mock data imports with TanStack Query hooks once backend is ready.
+ * Live data comes from GET /dashboard via useDashboard() (see
+ * hooks/useDashboard.ts and backend/services/dashboard.py).
+ * quickActionsData remains mock — those are static frontend-only links,
+ * not backend-derived (see quickActionsData in lib/mock-data.ts).
  */
 
 import { useMemo } from 'react';
-import { Monitor, Wifi, WifiOff, AlertTriangle, RefreshCw } from 'lucide-react';
+import { Monitor, Wifi, WifiOff, AlertTriangle, RefreshCw, Loader2 } from 'lucide-react';
 import { Button } from '#/components/ui/button';
 import {
   Card,
@@ -24,14 +27,8 @@ import { OSDistributionChart } from '#/components/data-display/OSDistributionCha
 import { OnboardingVolumeChart } from '#/components/data-display/OnboardingVolumeChart';
 import { AuditActivityFeed } from '#/components/data-display/AuditActivityFeed';
 import { QuickActions } from '#/components/data-display/QuickActions';
-import {
-  healthTrendData,
-  osDistributionData,
-  onboardingVolumeData,
-  auditActivityData,
-  dashboardStats,
-  quickActionsData,
-} from '#/lib/mock-data';
+import { quickActionsData } from '#/lib/mock-data';
+import { useDashboard, type DashboardSnapshot } from '#/hooks/useDashboard';
 
 // ---------------------------------------------------------------------------
 // Sub-components
@@ -56,7 +53,11 @@ function DashboardHeader(): JSX.Element {
   );
 }
 
-function StatsRow(): JSX.Element {
+interface StatsRowProps {
+  readonly stats: DashboardSnapshot['stats'];
+}
+
+function StatsRow({ stats }: StatsRowProps): JSX.Element {
   return (
     <section
       className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-6"
@@ -64,10 +65,10 @@ function StatsRow(): JSX.Element {
     >
       <StatsCard
         title="Total Assets"
-        value={dashboardStats.totalAssets}
+        value={stats.totalAssets}
         subtitle="Registered devices"
         trend={{
-          value: dashboardStats.totalAssetsChange,
+          value: stats.totalAssetsChange,
           direction: 'up',
           label: 'this week',
         }}
@@ -76,17 +77,17 @@ function StatsRow(): JSX.Element {
       />
       <StatsCard
         title="Online"
-        value={dashboardStats.online}
-        subtitle={`${dashboardStats.onlinePercentage}% uptime`}
+        value={stats.online}
+        subtitle={`${stats.onlinePercentage}% uptime`}
         icon={Wifi}
         variant="success"
       />
       <StatsCard
         title="Offline"
-        value={dashboardStats.offline}
+        value={stats.offline}
         subtitle="Currently unreachable"
         trend={{
-          value: dashboardStats.offlineChange,
+          value: stats.offlineChange,
           direction: 'up',
           label: 'since yesterday',
         }}
@@ -95,8 +96,8 @@ function StatsRow(): JSX.Element {
       />
       <StatsCard
         title="Health Alerts"
-        value={dashboardStats.healthAlerts}
-        subtitle={`${dashboardStats.criticalAlerts} critical`}
+        value={stats.healthAlerts}
+        subtitle={`${stats.criticalAlerts} critical`}
         icon={AlertTriangle}
         variant="warning"
       />
@@ -104,7 +105,11 @@ function StatsRow(): JSX.Element {
   );
 }
 
-function HealthTrendSection(): JSX.Element {
+interface HealthTrendSectionProps {
+  readonly data: DashboardSnapshot['healthTrend'];
+}
+
+function HealthTrendSection({ data }: HealthTrendSectionProps): JSX.Element {
   return (
     <Card className="lg:col-span-2">
       <CardHeader className="pb-2">
@@ -127,17 +132,18 @@ function HealthTrendSection(): JSX.Element {
         </div>
       </CardHeader>
       <CardContent>
-        <HealthTrendChart data={healthTrendData} />
+        <HealthTrendChart data={data} />
       </CardContent>
     </Card>
   );
 }
 
-function OSDistributionSection(): JSX.Element {
-  const total = useMemo(
-    () => osDistributionData.reduce((sum, item) => sum + item.count, 0),
-    []
-  );
+interface OSDistributionSectionProps {
+  readonly data: DashboardSnapshot['osDistribution'];
+}
+
+function OSDistributionSection({ data }: OSDistributionSectionProps): JSX.Element {
+  const total = useMemo(() => data.reduce((sum, item) => sum + item.count, 0), [data]);
 
   return (
     <Card>
@@ -146,15 +152,19 @@ function OSDistributionSection(): JSX.Element {
         <CardDescription>Breakdown by operating system</CardDescription>
       </CardHeader>
       <CardContent>
-        <OSDistributionChart data={osDistributionData} total={total} />
+        <OSDistributionChart data={data} total={total} />
       </CardContent>
     </Card>
   );
 }
 
-function OnboardingVolumeSection(): JSX.Element {
+interface OnboardingVolumeSectionProps {
+  readonly data: DashboardSnapshot['onboardingVolume'];
+}
+
+function OnboardingVolumeSection({ data }: OnboardingVolumeSectionProps): JSX.Element {
   const summary = useMemo(() => {
-    return onboardingVolumeData.reduce(
+    return data.reduce(
       (acc, week) => ({
         completed: acc.completed + week.completed,
         inProgress: acc.inProgress + week.inProgress,
@@ -162,23 +172,16 @@ function OnboardingVolumeSection(): JSX.Element {
       }),
       { completed: 0, inProgress: 0, failed: 0 }
     );
-  }, []);
+  }, [data]);
 
   return (
     <Card>
       <CardHeader className="pb-2">
-        <div className="flex items-center justify-between">
-          <div>
-            <CardTitle>Onboarding Volume</CardTitle>
-            <CardDescription>New employees this month</CardDescription>
-          </div>
-          <Badge variant="secondary" className="bg-success/10 text-success hover:bg-success/20">
-            +18%
-          </Badge>
-        </div>
+        <CardTitle>Onboarding Volume</CardTitle>
+        <CardDescription>New employees this month</CardDescription>
       </CardHeader>
       <CardContent className="space-y-6">
-        <OnboardingVolumeChart data={onboardingVolumeData} />
+        <OnboardingVolumeChart data={data} />
         <div className="grid grid-cols-3 gap-4 text-center border-t pt-4">
           <div>
             <p className="text-2xl font-bold tabular-nums text-success">{summary.completed}</p>
@@ -198,7 +201,11 @@ function OnboardingVolumeSection(): JSX.Element {
   );
 }
 
-function AuditActivitySection(): JSX.Element {
+interface AuditActivitySectionProps {
+  readonly items: DashboardSnapshot['auditActivity'];
+}
+
+function AuditActivitySection({ items }: AuditActivitySectionProps): JSX.Element {
   return (
     <Card className="lg:col-span-2">
       <CardHeader className="pb-2">
@@ -213,7 +220,7 @@ function AuditActivitySection(): JSX.Element {
         </div>
       </CardHeader>
       <CardContent>
-        <AuditActivityFeed items={auditActivityData} />
+        <AuditActivityFeed items={items} />
       </CardContent>
     </Card>
   );
@@ -234,12 +241,46 @@ function QuickActionsSection(): JSX.Element {
 }
 
 // ---------------------------------------------------------------------------
+// Loading / error states
+// ---------------------------------------------------------------------------
+
+function DashboardLoading(): JSX.Element {
+  return (
+    <div className="flex flex-col items-center justify-center gap-3 py-24 text-muted-foreground">
+      <Loader2 className="h-6 w-6 animate-spin" aria-hidden="true" />
+      <p className="text-sm">Loading dashboard…</p>
+    </div>
+  );
+}
+
+interface DashboardErrorProps {
+  readonly onRetry: () => void;
+}
+
+function DashboardError({ onRetry }: DashboardErrorProps): JSX.Element {
+  return (
+    <div className="flex flex-col items-center justify-center gap-3 py-24 text-center">
+      <AlertTriangle className="h-6 w-6 text-danger" aria-hidden="true" />
+      <p className="text-sm text-muted-foreground">
+        Couldn&apos;t load the dashboard. Please try again.
+      </p>
+      <Button variant="outline" size="sm" onClick={onRetry}>
+        Retry
+      </Button>
+    </div>
+  );
+}
+
+// ---------------------------------------------------------------------------
 // Main Page
 // ---------------------------------------------------------------------------
 
 export default function Dashboard(): JSX.Element {
+  const { data, isLoading, isError, refetch } = useDashboard();
+
   return (
     <main id="main-content" className="px-6 py-8 space-y-6" tabIndex={-1}>
+      
       <a
         href="#main-content"
         className="sr-only focus:not-sr-only focus:absolute focus:top-4 focus:left-4 focus:z-50 focus:rounded-md focus:bg-primary focus:px-4 focus:py-2 focus:text-primary-foreground"
@@ -248,25 +289,33 @@ export default function Dashboard(): JSX.Element {
       </a>
 
       <DashboardHeader />
-      <StatsRow />
 
-      <section
-        className="grid grid-cols-1 lg:grid-cols-3 gap-6"
-        aria-label="Analytics charts"
-      >
-        <HealthTrendSection />
-        <OSDistributionSection />
-      </section>
+      {isLoading && <DashboardLoading />}
+      {isError && !isLoading && <DashboardError onRetry={() => void refetch()} />}
 
-      <section
-        className="grid grid-cols-1 lg:grid-cols-3 gap-6"
-        aria-label="Operational overview"
-      >
-        <OnboardingVolumeSection />
-        <AuditActivitySection />
-      </section>
+      {data && (
+        <>
+          <StatsRow stats={data.stats} />
 
-      <QuickActionsSection />
+          <section
+            className="grid grid-cols-1 lg:grid-cols-3 gap-6"
+            aria-label="Analytics charts"
+          >
+            <HealthTrendSection data={data.healthTrend} />
+            <OSDistributionSection data={data.osDistribution} />
+          </section>
+
+          <section
+            className="grid grid-cols-1 lg:grid-cols-3 gap-6"
+            aria-label="Operational overview"
+          >
+            <OnboardingVolumeSection data={data.onboardingVolume} />
+            <AuditActivitySection items={data.auditActivity} />
+          </section>
+
+          <QuickActionsSection />
+        </>
+      )}
     </main>
   );
 }
