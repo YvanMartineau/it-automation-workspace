@@ -136,7 +136,7 @@ step "6/8  Python virtual environment (backend via uv)"
 export UV_PYTHON_INSTALL_DIR="$HOME/.local/share/uv/python"
 
 if [[ ! -d "backend/.venv" ]]; then
-  uv python install 3.12
+  # uv automatically downloads and symlinks isolated Python 3.12 binaries completely independent of system paths
   uv venv backend/.venv --python 3.12 --quiet
 fi
 
