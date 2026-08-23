@@ -1,65 +1,137 @@
-import React from "react";
+// src/components/reports/ReportCard.tsx — Premium Edition
 import { FileText, Download, Eye, Clock, CheckCircle2, AlertTriangle, Loader2 } from "lucide-react";
-import { Card, CardContent, CardFooter, CardHeader, CardTitle } from "#/components/ui/card";
+import { Card, CardContent, CardFooter, CardHeader } from "#/components/ui/card";
 import { Button } from "#/components/ui/button";
 import { Badge } from "#/components/ui/badge";
-import { Report, reportTypeLabels } from "#/types/report";
+import { reportTypeLabels } from "#/types/report";
+import { cn } from "#/lib/utils";
+
+type ReportStatus = "completed" | "processing" | "failed";
+
+type Report = {
+  id?: string;
+  title: string;
+  type?: string;
+  status: ReportStatus;
+  generatedAt: string | Date;
+  fileSizeBytes?: number;
+  generatedBy: string;
+  downloadUrl?: string;
+};
 
 interface ReportCardProps {
   report: Report;
   onPreview: (report: Report) => void;
 }
 
-export const ReportCard: React.FC<ReportCardProps> = ({ report, onPreview }) => {
-  const formatBytes = (bytes?: number) => {
-    if (!bytes) return "N/A";
-    const k = 1024;
-    const sizes = ["Bytes", "KB", "MB", "GB"];
-    const i = Math.floor(Math.log(bytes) / Math.log(k));
-    return `${parseFloat((bytes / Math.pow(k, i)).toFixed(1))} ${sizes[i]}`;
+function formatBytes(bytes?: number): string {
+  if (!bytes) return "–";
+  const k = 1024;
+  const sizes = ["Bytes", "KB", "MB", "GB"];
+  const i = Math.floor(Math.log(bytes) / Math.log(k));
+  return `${parseFloat((bytes / Math.pow(k, i)).toFixed(1))} ${sizes[i]}`;
+}
+
+function StatusBadge({ status }: { status: Report["status"] }): JSX.Element {
+  const config: Partial<Record<Report["status"], { gradient: string; icon: JSX.Element; badgeClass: string; label: string }>> = {
+    completed: {
+      gradient: "from-success/60 to-success/15",
+      icon: <CheckCircle2 className="h-3 w-3" />,
+      badgeClass: "bg-success/8 text-success border-success/20",
+      label: "Fertig",
+    },
+    processing: {
+      gradient: "from-primary/60 to-primary/15",
+      icon: <Loader2 className="h-3 w-3 animate-spin" />,
+      badgeClass: "bg-primary/8 text-primary border-primary/20",
+      label: "In Arbeit",
+    },
+    failed: {
+      gradient: "from-danger/60 to-danger/15",
+      icon: <AlertTriangle className="h-3 w-3" />,
+      badgeClass: "bg-danger/8 text-danger border-danger/20",
+      label: "Fehlgeschlagen",
+    },
+  };
+
+  const c = config[status] ?? config.processing ?? {
+    gradient: "from-primary/60 to-primary/15",
+    icon: <Loader2 className="h-3 w-3 animate-spin" />,
+    badgeClass: "bg-primary/8 text-primary border-primary/20",
+    label: "In Arbeit",
   };
 
   return (
-    <Card className="flex flex-col justify-between transition-shadow hover:shadow-md">
-      <CardHeader className="pb-3">
-        <div className="flex items-start justify-between gap-2">
-          <div className="flex items-center gap-2">
-            <div className="rounded-lg bg-primary/10 p-2 text-primary">
-              <FileText className="h-5 w-5" />
+    <Badge variant="outline" className={cn("rounded-full px-2 py-0.5 text-[10px] font-semibold border gap-1", c.badgeClass)}>
+      {c.icon}
+      {c.label}
+    </Badge>
+  );
+}
+
+export function ReportCard({ report, onPreview }: ReportCardProps): JSX.Element {
+  const reportTypeLabel =
+    report.type && reportTypeLabels[report.type as keyof typeof reportTypeLabels]
+      ? reportTypeLabels[report.type as keyof typeof reportTypeLabels]
+      : String(report.type ?? "unknown");
+
+  return (
+    <Card
+      className={cn(
+        "group relative overflow-hidden rounded-xl border border-border/60",
+        "shadow-sm transition-all duration-300 ease-premium",
+        "hover:shadow-card-hover hover:-translate-y-0.5"
+      )}
+    >
+      {/* Gradient accent */}
+      <div
+        className={cn(
+          "absolute left-0 top-0 bottom-0 w-[3px] bg-gradient-to-b",
+          report.status === "completed" && "from-success/80 to-success/20",
+          report.status === "processing" && "from-primary/80 to-primary/20",
+          report.status === "failed" && "from-danger/80 to-danger/20"
+        )}
+        aria-hidden="true"
+      />
+
+      <CardHeader className="pb-3 pt-4 px-4">
+        <div className="flex items-start justify-between gap-3">
+          <div className="flex items-center gap-3 min-w-0">
+            <div
+              className={cn(
+                "flex h-10 w-10 shrink-0 items-center justify-center rounded-xl",
+                "bg-gradient-to-br",
+                report.status === "completed" && "from-success/12 to-success/4",
+                report.status === "processing" && "from-primary/12 to-primary/4",
+                report.status === "failed" && "from-danger/12 to-danger/4",
+                "ring-1 ring-foreground/5"
+              )}
+            >
+              <FileText
+                className={cn(
+                  "h-5 w-5",
+                  report.status === "completed" && "text-success",
+                  report.status === "processing" && "text-primary",
+                  report.status === "failed" && "text-danger"
+                )}
+              />
             </div>
-            <div>
-              <CardTitle className="text-base font-semibold tracking-tight">{report.title}</CardTitle>
-              <p className="text-xs text-muted-foreground">{reportTypeLabels[report.type]}</p>
+            <div className="min-w-0">
+              <h4 className="text-sm font-semibold text-foreground/90 truncate">{report.title}</h4>
+              <p className="text-[11px] text-muted-foreground/50 mt-0.5">{reportTypeLabel}</p>
             </div>
           </div>
-          {report.status === "completed" && (
-            <Badge variant="outline" className="border-emerald-500/20 bg-emerald-500/10 text-emerald-600 dark:text-emerald-400">
-              <CheckCircle2 className="mr-1 h-3 w-3" />
-              Fertig
-            </Badge>
-          )}
-          {report.status === "processing" && (
-            <Badge variant="outline" className="border-amber-500/20 bg-amber-500/10 text-amber-600 dark:text-amber-400">
-              <Loader2 className="mr-1 h-3 w-3 animate-spin" />
-              In Arbeit
-            </Badge>
-          )}
-          {report.status === "failed" && (
-            <Badge variant="destructive">
-              <AlertTriangle className="mr-1 h-3 w-3" />
-              Fehlgeschlagen
-            </Badge>
-          )}
+          <StatusBadge status={report.status} />
         </div>
       </CardHeader>
 
-      <CardContent className="space-y-2 text-xs text-muted-foreground">
-        <div className="flex items-center justify-between">
-          <span className="flex items-center gap-1">
-            <Clock className="h-3.5 w-3.5" />
-            Erstellt am:
+      <CardContent className="space-y-2.5 px-4 pb-0">
+        <div className="flex items-center justify-between text-xs">
+          <span className="text-muted-foreground/50 flex items-center gap-1.5">
+            <Clock className="h-3 w-3" />
+            Erstellt
           </span>
-          <span className="font-medium tabular-nums text-foreground">
+          <span className="font-medium tabular-nums text-foreground/80">
             {new Date(report.generatedAt).toLocaleDateString("de-DE", {
               day: "2-digit",
               month: "2-digit",
@@ -69,45 +141,48 @@ export const ReportCard: React.FC<ReportCardProps> = ({ report, onPreview }) => 
             })}
           </span>
         </div>
-        <div className="flex items-center justify-between">
-          <span>Dateigröße:</span>
-          <span className="font-medium tabular-nums text-foreground">{formatBytes(report.fileSizeBytes)}</span>
+        <div className="flex items-center justify-between text-xs">
+          <span className="text-muted-foreground/50">Größe</span>
+          <span className="font-medium tabular-nums text-foreground/80">{formatBytes(report.fileSizeBytes)}</span>
         </div>
-        <div className="flex items-center justify-between">
-          <span>Erstellt von:</span>
-          <span className="font-medium text-foreground">{report.generatedBy}</span>
+        <div className="flex items-center justify-between text-xs">
+          <span className="text-muted-foreground/50">Erstellt von</span>
+          <span className="font-medium text-foreground/80">{report.generatedBy}</span>
         </div>
       </CardContent>
 
-      <CardFooter className="flex gap-2 pt-2">
+      <CardFooter className="flex gap-2 pt-4 pb-4 px-4">
         <Button
           variant="outline"
           size="sm"
-          className="w-full"
+          className="flex-1 rounded-xl h-9 gap-2 border-border/60"
           disabled={report.status !== "completed"}
           onClick={() => onPreview(report)}
-          aria-label={`Vorschau für ${report.title}`}
         >
-          <Eye className="mr-2 h-4 w-4" />
+          <Eye className="h-3.5 w-3.5" />
           Vorschau
         </Button>
         {report.status === "completed" && report.downloadUrl ? (
           <a
             href={report.downloadUrl}
             download
-            aria-label={`Bericht ${report.title} herunterladen`}
-            className="inline-flex w-full items-center justify-center rounded-md bg-primary px-3 py-2 text-sm font-medium text-primary-foreground shadow-sm transition-colors hover:bg-primary/90 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2"
+            className={cn(
+              "inline-flex flex-1 items-center justify-center gap-2 rounded-xl h-9 px-3",
+              "bg-primary text-primary-foreground text-sm font-medium",
+              "shadow-sm hover:bg-primary/90 transition-colors",
+              "focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+            )}
           >
-            <Download className="mr-2 h-4 w-4" />
+            <Download className="h-3.5 w-3.5" />
             Download
           </a>
         ) : (
-          <Button size="sm" className="w-full" disabled={report.status !== "completed" || !report.downloadUrl}>
-            <Download className="mr-2 h-4 w-4" />
+          <Button size="sm" className="flex-1 rounded-xl h-9 gap-2" disabled>
+            <Download className="h-3.5 w-3.5" />
             Download
           </Button>
         )}
       </CardFooter>
     </Card>
   );
-};
+}

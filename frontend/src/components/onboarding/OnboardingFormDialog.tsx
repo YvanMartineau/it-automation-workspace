@@ -1,4 +1,4 @@
-// src/components/onboarding/OnboardingFormDialog.tsx — Premium Edition
+// src/components/onboarding/OnboardingFormDialog.tsx — Premium Edition (Fixed)
 import { useState } from "react";
 import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
@@ -27,6 +27,7 @@ import {
 import { Plus, Lock, Loader2, UserPlus } from "lucide-react";
 import { onboardingFormSchema, type OnboardingFormValues } from "#/lib/validators";
 import { useCreateOnboarding } from "#/hooks/useOnboarding";
+import { cn } from "#/lib/utils";
 
 export function OnboardingFormDialog() {
   const [open, setOpen] = useState(false);
@@ -54,11 +55,18 @@ export function OnboardingFormDialog() {
 
   return (
     <Dialog open={open} onOpenChange={setOpen}>
-      <DialogTrigger>
-        <Button type="button" className="gap-2 rounded-xl px-5 shadow-sm">
-          <Plus className="h-4 w-4" aria-hidden="true" />
-          Onboarding starten
-        </Button>
+      {/* FIX: DialogTrigger renders its own <button> — do NOT nest a <Button> inside it */}
+      <DialogTrigger
+        className={cn(
+          "inline-flex items-center justify-center gap-2 whitespace-nowrap rounded-xl text-sm font-medium",
+          "bg-primary text-primary-foreground hover:bg-primary/90",
+          "h-10 px-5 py-2 shadow-sm transition-colors",
+          "focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2",
+          "disabled:pointer-events-none disabled:opacity-50"
+        )}
+      >
+        <Plus className="h-4 w-4" aria-hidden="true" />
+        Onboarding starten
       </DialogTrigger>
 
       <DialogContent className="sm:max-w-[520px] rounded-2xl p-0 overflow-hidden">
