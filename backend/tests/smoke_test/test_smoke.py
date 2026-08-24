@@ -33,7 +33,7 @@ async def test_refresh_token_missing():
     assert response.status_code == 401
 
 
-#SHOULD FAIL
+#SHOULD PASS
 @pytest.mark.asyncio
 async def test_login_invalid_credentials():
     """Verify login fails cleanly with invalid credentials."""
