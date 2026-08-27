@@ -26,12 +26,12 @@ test.describe('Frontend Smoke Tests', () => {
     await page.fill('input[type="email"], input[name="email"]', 'wrong@example.com');
     await page.fill('input[type="password"]', 'badpassword');
     
-    // Click submit
-    await page.click('button[type="submit"], button:has-text("Login")');
+    // Click submit using the correct German button label
+    await page.click('button[type="submit"], button:has-text("Anmelden")');
 
-    // Verify that an error banner or toast appears cleanly without crashing the UI
-    const errorAlert = page.locator('.error, [role="alert"], text=/invalid|error|unauthorized/i');
-    await expect(errorAlert).toBeVisible({ timeout: 5000 });
+    // Verify that the error alert or toast containing the failure message is visible
+    const errorAlert = page.getByRole('alert').or(page.getByText('Anmeldung fehlgeschlagen'));
+    await expect(errorAlert.first()).toBeVisible({ timeout: 5000 });
   });
 
 });
