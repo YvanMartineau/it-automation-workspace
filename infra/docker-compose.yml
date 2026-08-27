@@ -112,9 +112,11 @@ services:
 
   pgadmin:
     image: dpage/pgadmin4:latest
+    extra_hosts:
+      - "host.docker.internal:host-gateway"
     environment:
-      PGADMIN_DEFAULT_EMAIL: admin@local.dev
-      PGADMIN_DEFAULT_PASSWORD: admin
+      PGADMIN_DEFAULT_EMAIL: admin@dev.de
+      PGADMIN_DEFAULT_PASSWORD: dev
       #added to avoid error: "pgAdmin4 is running in SERVER_MODE. Please set PGADMIN_CONFIG_SERVER_MODE to False to run in DESKTOP_MODE."
       PGADMIN_CONFIG_SERVER_MODE: 'False'
     ports:
