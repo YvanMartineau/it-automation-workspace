@@ -6,8 +6,60 @@
 #
 #  CROSS-PLATFORM NOTES (Windows Git Bash / MSYS2 / WSL):
 #    - Uses node directly via node_modules/.bin/eslint to bypass npx wrapper issues on Windows
-#    - Properly quotes directory paths containing spaces
-#    - All grep patterns are single-quoted to prevent --flag interpretation
+#    - Staged file names are read NUL-delimited (git diff -z), so spaces,
+#      unicode, and even embedded newlines in paths can't corrupt parsing
+#    - Text/binary classification no longer depends on the external `file`
+#      command (often missing on minimal Git-for-Windows/MSYS2 installs) —
+#      it uses grep's own binary-file detection instead
+#
+#  CHANGELOG — fixes applied after security review:
+#    [FIX-1]  Size guard now measures the STAGED blob (git cat-file -s
+#             ":path"), not the working-tree file. Previously you could
+#             `git add` a huge file, shrink the working-tree copy without
+#             re-staging, and the guard would report 0 bytes.
+#    [FIX-2]  ESLint args are now passed as a real bash array instead of a
+#             flattened, unquoted string — fixes silent breakage on staged
+#             filenames containing spaces (they were word-split into
+#             multiple bogus arguments).
+#    [FIX-3]  Dropped the hard, unguarded dependency on the external `file`
+#             command for text/binary detection (checks 4-6). Replaced with
+#             grep's own binary detection, with a capability probe that
+#             fails toward "scan it" rather than toward "silently skip it"
+#             if the installed grep lacks the feature.
+#    [FIX-4]  Filename-pattern matching (check 1/3) is now case-insensitive,
+#             matching the case-insensitivity already used by the content
+#             scans — so ".ENV" or "ID_RSA" (uppercase) can no longer bypass
+#             the filename-based block on case-sensitive filesystems.
+#    [FIX-5]  Alembic model-path detection now also matches backend/models/...
+#             directly (previously required an extra intermediate directory,
+#             e.g. only matched backend/app/models/, not backend/models/).
+#    [FIX-6]  Python lint now runs only against staged .py files instead of
+#             the whole backend/ tree — unrelated pre-existing issues
+#             elsewhere can no longer block this commit. Staged .py files
+#             outside backend/ are now explicitly flagged instead of being
+#             silently un-linted.
+#    [FIX-7]  ESLint now only runs against staged files that actually live
+#             under frontend/; staged .ts/.tsx files elsewhere are flagged
+#             explicitly instead of being mis-invoked against a wrong path.
+#    [FIX-8]  Certificate-like files (.pem/.crt/.cer/.der) are no longer
+#             blocked purely by extension — public certificates are safe to
+#             commit. Content is inspected for a PRIVATE KEY block, and only
+#             that is blocked; unrecognized or binary cert-like files are
+#             flagged for manual review instead of hard-failing.
+#    [FIX-9]  The security-keyword scan (was check 6) is downgraded from a
+#             hard FAIL to a WARN. console.log / import random / DEBUG=True /
+#             TODO-FIXME are style signals, not secrets — hard-blocking on
+#             them mostly trains people to reach for `--no-verify`, which
+#             also skips the real secret-detection checks.
+#    [FIX-10] Broadened secret-pattern coverage (Slack, Stripe, Google, npm,
+#             Anthropic/OpenAI-style keys, unquoted "key: value" style
+#             assignments) and replaced the GNU-only `\s` with the POSIX
+#             `[[:space:]]` class so patterns behave the same on BSD/macOS
+#             grep as on GNU grep.
+#    [FIX-11] Added common env-template names (.env.sample/.template/.dist)
+#             to the exemption list alongside .env.example; also exempted
+#             yarn.lock / pnpm-lock.yaml from the noisy entropy/secret scans
+#             (package-lock.json was already exempted).
 # ============================================================
 
 set -euo pipefail
@@ -35,11 +87,54 @@ safe_run() {
   return $status
 }
 
+# ── Helpers ───────────────────────────────────────────────────
+
+# [FIX-3] Capability probe: does this grep support -I (ignore binary
+# matches)? If not, GREP_BINARY_FLAG stays empty and is_text_content()
+# below degrades to "treat everything as text" — i.e. it fails toward
+# scanning content rather than silently skipping it.
+if printf 'x' | grep -Iq . 2>/dev/null; then
+  GREP_BINARY_FLAG=(-I)
+else
+  GREP_BINARY_FLAG=()
+fi
+
+is_text_content() {
+  # Reads the STAGED version of a path and reports (via exit code) whether
+  # it looks like text. Uses grep's own binary detection instead of the
+  # external `file` command, which is not guaranteed to be installed.
+  git show ":$1" 2>/dev/null | grep "${GREP_BINARY_FLAG[@]}" -q .
+}
+
+is_env_template() {
+  # [FIX-11] .env.example was the only exempted template name before.
+  local f="$1"
+  [[ "$f" =~ \.env\.(example|sample|template|dist)$ ]]
+}
+
+is_content_scan_exempt() {
+  # Shared exemption list for the content-based scans (checks 4, 5, 6).
+  local f="$1"
+  is_env_template "$f" && return 0
+  [[ "$f" == *DECISIONS.md ]] && return 0
+  [[ "$f" == .git-hooks/* ]] && return 0
+  [[ "$f" == *package-lock.json ]] && return 0
+  [[ "$f" == *yarn.lock ]] && return 0
+  [[ "$f" == *pnpm-lock.yaml ]] && return 0
+  return 1
+}
+
 header "── Enterprise pre-commit security & quality checks ──"
 
-STAGED_FILES="$(git diff --cached --name-only 2>/dev/null || true)"
+# [FIX robustness] NUL-delimited read: filenames with spaces, unicode, or
+# even embedded newlines can't corrupt this loop the way a plain newline-
+# separated `git diff --name-only` (without -z) could.
+STAGED_FILES_ARR=()
+while IFS= read -r -d '' f; do
+  STAGED_FILES_ARR+=("$f")
+done < <(git diff --cached --name-only -z 2>/dev/null || true)
 
-if [[ -z "${STAGED_FILES}" ]]; then
+if [[ ${#STAGED_FILES_ARR[@]} -eq 0 ]]; then
   ok "No files staged — nothing to check"
   echo ""
   echo -e "${BOLD}── Result: ${GREEN}${PASS} passed${RESET}${BOLD}, ${RED}${FAIL} failed${RESET} ──"
@@ -47,19 +142,16 @@ if [[ -z "${STAGED_FILES}" ]]; then
   exit 0
 fi
 
-# ── 1/9 Secret file name detection ───────────────────────────
-header "[1/9] Secret file name detection"
+# ── 1/9 Secret file name & certificate content detection ────
+header "[1/9] Secret file name & certificate content detection"
 
 BLOCKED_FILE_PATTERNS=(
   '\.env$'
   '\.env\.'
   '.*_rsa$'
-  '.*\.pem$'
   '.*\.key$'
   '.*\.p12$'
   '.*\.jks$'
-  '.*\.crt$'
-  '.*\.der$'
   '.*client_secret.*\.json$'
   '.*credentials.*\.json$'
   '.*service\.account.*\.json$'
@@ -67,22 +159,49 @@ BLOCKED_FILE_PATTERNS=(
   'aiven.*\.pem$'
   '.*\.n8n/credentials/.*'
 )
+# [FIX-8] Generic '.crt$' / '.pem$' / '.der$' were removed from this blanket
+# list — those extensions are used for public certificates as often as for
+# private keys, so blanket-blocking them was a false-positive source. They
+# are classified by content instead, in the loop further below.
 
 BLOCKED=0
-while IFS= read -r file; do
-  [[ -z "$file" ]] && continue
-  [[ "$file" =~ \.env\.example$ ]] && continue
+shopt -s nocasematch   # [FIX-4]
+for file in "${STAGED_FILES_ARR[@]}"; do
+  is_env_template "$file" && continue
   [[ "$file" == .git-hooks/* ]] && continue
 
   for pattern in "${BLOCKED_FILE_PATTERNS[@]}"; do
     if [[ "$file" =~ $pattern ]]; then
       fail "BLOCKED: '$file' matches secret-bearing pattern '$pattern'"
       BLOCKED=1
+      break   # one report per file is enough
     fi
   done
-done <<< "${STAGED_FILES}"
+done
+shopt -u nocasematch
 
-[[ $BLOCKED -eq 0 ]] && ok "No secret-like files staged"
+# Certificate-like files: classify by content instead of blanket-blocking.
+for file in "${STAGED_FILES_ARR[@]}"; do
+  [[ "$file" =~ \.(pem|crt|cer|der)$ ]] || continue
+  [[ "$file" == .git-hooks/* ]] && continue
+  [[ ! -f "$file" ]] && continue
+
+  if is_text_content "$file"; then
+    content="$(git show ":$file" 2>/dev/null || true)"
+    if grep -Eq -- '-----BEGIN[A-Z0-9 ]*PRIVATE KEY-----' <<< "$content"; then
+      fail "BLOCKED: '$file' contains a PRIVATE KEY block"
+      BLOCKED=1
+    elif grep -Eq -- '-----BEGIN CERTIFICATE-----' <<< "$content"; then
+      : # public certificate content only — safe to commit
+    else
+      warn "'$file' has a certificate-like extension but unrecognized content — review manually"
+    fi
+  else
+    warn "'$file' is a binary certificate-like file — verify it does not contain private key material"
+  fi
+done
+
+[[ $BLOCKED -eq 0 ]] && ok "No secret-bearing files or embedded private keys staged"
 
 # ── 2/9 Large file size guard ────────────────────────────────
 header "[2/9] Large file size guard (1MB limit)"
@@ -90,23 +209,26 @@ header "[2/9] Large file size guard (1MB limit)"
 SIZE_BLOCKED=0
 MAX_SIZE_BYTES=1000000
 
-while IFS= read -r file; do
-  [[ -z "$file" ]] && continue
+for file in "${STAGED_FILES_ARR[@]}"; do
   [[ "$file" == .git-hooks/* ]] && continue
-  [[ ! -f "$file" ]] && continue
 
-  size=$(safe_run wc -c <"$file" 2>/dev/null || echo 0)
-
-  if [[ "$size" -gt "$MAX_SIZE_BYTES" ]]; then
-    fail "File '$file' exceeds ${MAX_SIZE_BYTES} bytes (${size}) — blocked"
-    SIZE_BLOCKED=1
+  # [FIX-1] Measure the STAGED blob (what will actually be committed), not
+  # the working-tree file — those can differ if the file was edited again
+  # after `git add` without being re-staged.
+  if size=$(git cat-file -s ":$file" 2>/dev/null); then
+    if (( size > MAX_SIZE_BYTES )); then
+      fail "File '$file' exceeds ${MAX_SIZE_BYTES} bytes (${size} staged) — blocked"
+      SIZE_BLOCKED=1
+    fi
   fi
-done <<< "${STAGED_FILES}"
+  # If ":$file" doesn't resolve (deletion, submodule gitlink, etc.) there's
+  # no staged blob content to size-check — skip quietly.
+done
 
 [[ $SIZE_BLOCKED -eq 0 ]] && ok "No oversized files staged"
 
-# ── 3/9 Binary / archive secret guard ────────────────────────
-header "[3/9] Binary / archive secret guard"
+# ── 3/9 Binary / archive guard ───────────────────────────────
+header "[3/9] Binary / archive guard"
 
 BINARY_PATTERNS=(
   '.*\.zip$'
@@ -115,21 +237,24 @@ BINARY_PATTERNS=(
   '.*\.tgz$'
   '.*\.p12$'
   '.*\.jks$'
-  '.*\.der$'
 )
+# .der was removed here too — see [FIX-8]; it's handled by the content-aware
+# certificate check in [1/9] instead of a blanket binary-extension block.
 
 BINARY_BLOCKED=0
-while IFS= read -r file; do
-  [[ -z "$file" ]] && continue
+shopt -s nocasematch   # [FIX-4]
+for file in "${STAGED_FILES_ARR[@]}"; do
   [[ "$file" == .git-hooks/* ]] && continue
 
   for pattern in "${BINARY_PATTERNS[@]}"; do
     if [[ "$file" =~ $pattern ]]; then
       fail "Binary/archive file '$file' blocked (pattern: $pattern)"
       BINARY_BLOCKED=1
+      break
     fi
   done
-done <<< "${STAGED_FILES}"
+done
+shopt -u nocasematch
 
 [[ $BINARY_BLOCKED -eq 0 ]] && ok "No binary/archive files staged"
 
@@ -137,33 +262,38 @@ done <<< "${STAGED_FILES}"
 header "[4/9] Hardcoded secret pattern scan"
 
 SECRET_PATTERNS=(
-  "['\"]?(password|passwd|secret|token|api[_-]?key)['\"]?\s*[:=]\s*['\"][^'\"]{4,}"
+  "['\"]?(password|passwd|secret|token|api[_-]?key)['\"]?[[:space:]]*[:=][[:space:]]*['\"][^'\"]{4,}"
+  "['\"]?(password|passwd|secret|token|api[_-]?key)['\"]?[[:space:]]*:[[:space:]]*[^[:space:]'\"]{4,}"  # [FIX-10] unquoted yaml-style
   "^(PASSWORD|SECRET|TOKEN|API_KEY|SENDGRID_API_KEY|SMTP_PASSWORD)=[^[:space:]]{4,}"
   "eyJ[A-Za-z0-9_-]*\.[A-Za-z0-9_-]*\.[A-Za-z0-9_-]*"
-  "AKIA[0-9A-Z]{16}"
-  "ghp_[A-Za-z0-9]{36}"
-  "gho_[A-Za-z0-9]{36}"
-  "glpat-[A-Za-z0-9_-]{20,}"
-  '-----BEGIN.*PRIVATE KEY-----'
+  "AKIA[0-9A-Z]{16}"                       # AWS access key id
+  "ghp_[A-Za-z0-9]{36}"                    # GitHub PAT
+  "gho_[A-Za-z0-9]{36}"                    # GitHub OAuth token
+  "glpat-[A-Za-z0-9_-]{20,}"               # GitLab PAT
+  "xox[baprs]-[0-9A-Za-z-]{10,}"           # Slack token            [FIX-10]
+  "sk_live_[0-9A-Za-z]{16,}"               # Stripe live secret key [FIX-10]
+  "AIza[0-9A-Za-z_-]{35}"                  # Google API key         [FIX-10]
+  "npm_[A-Za-z0-9]{36}"                    # npm token              [FIX-10]
+  "sk-ant-[A-Za-z0-9_-]{20,}"              # Anthropic API key      [FIX-10]
+  "sk-[A-Za-z0-9]{40,}"                    # OpenAI-style API key   [FIX-10]
+  '-----BEGIN[A-Z0-9 ]*PRIVATE KEY-----'
 )
 
 SECRET_FOUND=0
-while IFS= read -r file; do
-  [[ -z "$file" || ! -f "$file" ]] && continue
-  [[ "$file" == *.env.example ]] && continue
-  [[ "$file" == *DECISIONS.md ]] && continue
-  [[ "$file" == .git-hooks/* ]] && continue
-  [[ "$file" == *package-lock.json ]] && continue
+for file in "${STAGED_FILES_ARR[@]}"; do
+  [[ ! -f "$file" ]] && continue
+  is_content_scan_exempt "$file" && continue
 
-  if safe_run file "$file" | grep -qiE "text|utf-8"; then
+  if is_text_content "$file"; then   # [FIX-3]
+    content="$(git show ":$file" 2>/dev/null || true)"   # fetch once, not per-pattern
     for pattern in "${SECRET_PATTERNS[@]}"; do
-      if safe_run git show ":$file" | grep -Ei -- "$pattern" >/dev/null; then
+      if grep -Ei -- "$pattern" <<< "$content" >/dev/null; then
         fail "Possible hardcoded secret in '$file' (pattern: $pattern)"
         SECRET_FOUND=1
       fi
     done
   fi
-done <<< "${STAGED_FILES}"
+done
 
 [[ $SECRET_FOUND -eq 0 ]] && ok "No hardcoded secrets detected"
 
@@ -177,113 +307,133 @@ ENTROPY_PATTERNS=(
 )
 
 ENTROPY_FOUND=0
-while IFS= read -r file; do
-  [[ -z "$file" || ! -f "$file" ]] && continue
-  [[ "$file" == *.env.example ]] && continue
-  [[ "$file" == *DECISIONS.md ]] && continue
-  [[ "$file" == .git-hooks/* ]] && continue
-  [[ "$file" == *package-lock.json ]] && continue
+for file in "${STAGED_FILES_ARR[@]}"; do
+  [[ ! -f "$file" ]] && continue
+  is_content_scan_exempt "$file" && continue
 
-  if safe_run file "$file" | grep -qiE "text|utf-8"; then
+  if is_text_content "$file"; then
+    content="$(git show ":$file" 2>/dev/null || true)"
     for pattern in "${ENTROPY_PATTERNS[@]}"; do
-      if safe_run git show ":$file" | grep -E -- "$pattern" >/dev/null; then
+      if grep -E -- "$pattern" <<< "$content" >/dev/null; then
         warn "High-entropy string detected in '$file' (pattern: $pattern) — review manually"
         ENTROPY_FOUND=1
       fi
     done
   fi
-done <<< "${STAGED_FILES}"
+done
 
 [[ $ENTROPY_FOUND -eq 0 ]] && ok "No high-entropy tokens detected (heuristic)"
 
-# ── 6/9 Security-sensitive keyword scan ──────────────────────
-header "[6/9] Security-sensitive keyword scan"
+# ── 6/9 Security-sensitive keyword scan (advisory) ───────────
+header "[6/9] Security-sensitive keyword scan (advisory)"
+# [FIX-9] Style/hygiene signals, not secrets — WARN only, doesn't block.
 
-BLOCKED_KEYWORDS_REGEX=(
-  "TODO:\s*remove"
-  "FIXME:\s*security"
-  "import\s+random"
-  "DEBUG\s*=\s*True"
-  "console\s*\.\s*log\s*\("
-  "console\s*\.\s*(debug|info|warn|error)\s*\(.*secret"
-  "print\s*\(\s*password"
-  "print\s*\(\s*secret"
-  "logger\.(info|debug|warning|error)\s*\(.*secret"
+KEYWORD_PATTERNS=(
+  "TODO:[[:space:]]*remove"
+  "FIXME:[[:space:]]*security"
+  "import[[:space:]]+random"
+  "DEBUG[[:space:]]*=[[:space:]]*True"
+  "console[[:space:]]*\.[[:space:]]*log[[:space:]]*\("
+  "console[[:space:]]*\.[[:space:]]*(debug|info|warn|error)[[:space:]]*\(.*secret"
+  "print[[:space:]]*\([[:space:]]*password"
+  "print[[:space:]]*\([[:space:]]*secret"
+  "logger\.(info|debug|warning|error)[[:space:]]*\(.*secret"
 )
 
 KEYWORD_FOUND=0
-while IFS= read -r file; do
-  [[ -z "$file" || ! -f "$file" ]] && continue
+for file in "${STAGED_FILES_ARR[@]}"; do
+  [[ ! -f "$file" ]] && continue
   [[ "$file" == *.md ]] && continue
-  [[ "$file" == .git-hooks/* ]] && continue
+  is_content_scan_exempt "$file" && continue
 
-  if safe_run file "$file" | grep -qiE "text|utf-8"; then
-    for kw in "${BLOCKED_KEYWORDS_REGEX[@]}"; do
-      if safe_run git show ":$file" | grep -Eq -- "$kw"; then
-        fail "Blocked keyword pattern '$kw' found in '$file'"
+  if is_text_content "$file"; then
+    content="$(git show ":$file" 2>/dev/null || true)"
+    for pattern in "${KEYWORD_PATTERNS[@]}"; do
+      if grep -Eq -- "$pattern" <<< "$content"; then
+        warn "'$file' matches advisory pattern '$pattern' — consider cleaning up before merging"
         KEYWORD_FOUND=1
       fi
     done
   fi
-done <<< "${STAGED_FILES}"
+done
 
-[[ $KEYWORD_FOUND -eq 0 ]] && ok "No blocked security-sensitive keywords detected"
+[[ $KEYWORD_FOUND -eq 0 ]] && ok "No advisory keyword patterns detected"
 
 # ── 7/9 Python linting & formatting ──────────────────────────
-header "[7/9] Python linting & formatting (ruff, backend/)"
+header "[7/9] Python linting & formatting (ruff, staged files only)"
 
-PY_STAGED="$(echo "${STAGED_FILES}" | grep "\.py$" || true)"
-PY_FAIL=0
+PY_STAGED_BACKEND=()
+PY_STAGED_OUTSIDE=()
+for file in "${STAGED_FILES_ARR[@]}"; do
+  [[ "$file" == *.py ]] || continue
+  if [[ "$file" == backend/* ]]; then
+    PY_STAGED_BACKEND+=("$file")
+  else
+    PY_STAGED_OUTSIDE+=("$file")
+  fi
+done
 
-if [[ -n "${PY_STAGED}" ]]; then
+if [[ ${#PY_STAGED_BACKEND[@]} -gt 0 ]]; then
   if command -v ruff &>/dev/null; then
-    if safe_run ruff check backend/ --quiet; then
-      ok "ruff check passed on backend/"
+    # [FIX-6] Lint only the staged files, not the whole backend/ tree.
+    if safe_run ruff check "${PY_STAGED_BACKEND[@]}" --quiet; then
+      ok "ruff check passed on staged Python files"
     else
-      fail "ruff check found issues — run: ruff check backend/ --fix"
-      PY_FAIL=1
+      fail "ruff check found issues — run: ruff check ${PY_STAGED_BACKEND[*]} --fix"
     fi
-    if safe_run ruff format --check backend/ --quiet; then
-      ok "ruff format check passed on backend/"
+    if safe_run ruff format --check "${PY_STAGED_BACKEND[@]}" --quiet; then
+      ok "ruff format check passed on staged Python files"
     else
-      fail "ruff format check failed — run: ruff format backend/"
-      PY_FAIL=1
+      fail "ruff format check failed — run: ruff format ${PY_STAGED_BACKEND[*]}"
     fi
   else
     warn "ruff not installed — skipping Python lint/format"
   fi
 else
-  ok "No Python files staged"
+  ok "No staged Python files under backend/"
+fi
+
+if [[ ${#PY_STAGED_OUTSIDE[@]} -gt 0 ]]; then
+  # [FIX-6] Previously these were silently never linted at all.
+  warn "Staged Python file(s) outside backend/ are not covered by this hook's ruff config: ${PY_STAGED_OUTSIDE[*]}"
 fi
 
 # ── 8/9 TypeScript linting ───────────────────────────────────
-header "[8/9] TypeScript linting (eslint, frontend/)"
+header "[8/9] TypeScript linting (eslint, frontend/ only)"
 
 FRONTEND_DIR="frontend"
-TS_STAGED="$(echo "${STAGED_FILES}" | grep -E "\.(ts|tsx)$" || true)"
-TS_FAIL=0
+TS_STAGED_FRONTEND=()
+TS_STAGED_OUTSIDE=()
+for file in "${STAGED_FILES_ARR[@]}"; do
+  [[ "$file" =~ \.(ts|tsx)$ ]] || continue
+  if [[ "$file" == "${FRONTEND_DIR}/"* ]]; then
+    TS_STAGED_FRONTEND+=("${file#$FRONTEND_DIR/}")
+  else
+    TS_STAGED_OUTSIDE+=("$file")
+  fi
+done
 
-if [[ -n "${TS_STAGED}" ]]; then
+if [[ ${#TS_STAGED_FRONTEND[@]} -gt 0 ]]; then
   if ! safe_run node --version >/dev/null 2>&1; then
     fail "Node.js not found in PATH — cannot run ESLint"
-    TS_FAIL=1
   elif [[ ! -d "${FRONTEND_DIR}/node_modules" ]]; then
     fail "frontend/node_modules missing — run: cd ${FRONTEND_DIR} && npm install"
-    TS_FAIL=1
   else
-    # Format staged files relative to frontend/
-    TS_ARGS="$(echo "${TS_STAGED}" | sed "s|^${FRONTEND_DIR}/||" | tr '\n' ' ')"
-
-    # Bypass .cmd wrapper on Windows by calling node directly on the JS entrypoint
-    if (cd "${FRONTEND_DIR}" && safe_run node "./node_modules/eslint/bin/eslint.js" ${TS_ARGS} --quiet); then
+    # [FIX-2] Real array, expanded quoted — filenames with spaces survive intact.
+    if (cd "${FRONTEND_DIR}" && safe_run node "./node_modules/eslint/bin/eslint.js" "${TS_STAGED_FRONTEND[@]}" --quiet); then
       ok "ESLint passed on staged TypeScript files"
     else
       fail "ESLint found issues — run: cd ${FRONTEND_DIR} && npm run lint"
-      TS_FAIL=1
     fi
   fi
 else
-  ok "No TypeScript files staged"
+  ok "No staged TypeScript files under ${FRONTEND_DIR}/"
+fi
+
+if [[ ${#TS_STAGED_OUTSIDE[@]} -gt 0 ]]; then
+  # [FIX-7] Previously these were run through eslint with a wrong relative
+  # path and failed misleadingly. Now flagged explicitly instead.
+  warn "Staged TypeScript file(s) outside ${FRONTEND_DIR}/ are not covered by this hook's ESLint config: ${TS_STAGED_OUTSIDE[*]}"
 fi
 
 # ── 9/9 Alembic migration consistency ────────────────────────
@@ -292,17 +442,18 @@ header "[9/9] Alembic migration consistency"
 MODELS_CHANGED=0
 MIGRATIONS_STAGED=0
 
-while IFS= read -r file; do
-  [[ -z "$file" ]] && continue
+for file in "${STAGED_FILES_ARR[@]}"; do
   [[ "$file" == .git-hooks/* ]] && continue
 
-  if [[ "$file" =~ ^backend/.*/models/ ]] || [[ "$file" =~ ^backend/.*/db/models/ ]]; then
+  # [FIX-5] Also matches backend/models/... directly, not just
+  # backend/<pkg>/models/... or backend/<pkg>/db/models/...
+  if [[ "$file" =~ ^backend/(.*/)?models/ ]] || [[ "$file" =~ ^backend/(.*/)?db/models/ ]]; then
     MODELS_CHANGED=1
   fi
   if [[ "$file" =~ ^backend/db/migrations/versions/ ]]; then
     MIGRATIONS_STAGED=1
   fi
-done <<< "${STAGED_FILES}"
+done
 
 if [[ $MODELS_CHANGED -eq 1 ]]; then
   if [[ $MIGRATIONS_STAGED -eq 0 ]]; then
