@@ -60,6 +60,19 @@
 #             to the exemption list alongside .env.example; also exempted
 #             yarn.lock / pnpm-lock.yaml from the noisy entropy/secret scans
 #             (package-lock.json was already exempted).
+#    [FIX-12] Split check 4 into two tiers. Structural/branded secret
+#             signatures (AWS keys, GitHub/GitLab/Slack/Stripe/Google/npm/
+#             Anthropic-OpenAI-style tokens, JWT shape, PRIVATE KEY blocks)
+#             still hard-FAIL everywhere, including test files, because
+#             they're precise and rarely appear by accident. The generic
+#             keyword-heuristic patterns (password|secret|token|api_key
+#             followed by *any* quoted value >= 4 chars) only check the key
+#             name, not whether the value looks like a real secret — so
+#             they misfire constantly on test fixtures like
+#             `token="invalid"` or `password="securepass"`. Those generic
+#             patterns now WARN instead of FAIL inside test files (still
+#             visible for a human glance) and keep hard-FAILing everywhere
+#             else.
 # ============================================================
 
 set -euo pipefail
@@ -121,6 +134,19 @@ is_content_scan_exempt() {
   [[ "$f" == *package-lock.json ]] && return 0
   [[ "$f" == *yarn.lock ]] && return 0
   [[ "$f" == *pnpm-lock.yaml ]] && return 0
+  return 1
+}
+
+is_test_file() {
+  # [FIX-12] Used to soften generic keyword-heuristic secret matches (not
+  # the structural/branded ones) inside test code, where fixture values
+  # like token="invalid" or password="securepass" are the norm.
+  local f="$1"
+  [[ "$f" =~ (^|/)tests?/ ]] && return 0
+  [[ "$f" =~ (^|/)test_[^/]*\.py$ ]] && return 0
+  [[ "$f" =~ (^|/)[^/]*_test\.py$ ]] && return 0
+  [[ "$f" =~ \.(test|spec)\.(ts|tsx|js|jsx)$ ]] && return 0
+  [[ "$f" =~ (^|/)__tests__/ ]] && return 0
   return 1
 }
 
@@ -261,11 +287,10 @@ shopt -u nocasematch
 # ── 4/9 Hardcoded secret pattern scan ────────────────────────
 header "[4/9] Hardcoded secret pattern scan"
 
-SECRET_PATTERNS=(
-  "['\"]?(password|passwd|secret|token|api[_-]?key)['\"]?[[:space:]]*[:=][[:space:]]*['\"][^'\"]{4,}"
-  "['\"]?(password|passwd|secret|token|api[_-]?key)['\"]?[[:space:]]*:[[:space:]]*[^[:space:]'\"]{4,}"  # [FIX-10] unquoted yaml-style
-  "^(PASSWORD|SECRET|TOKEN|API_KEY|SENDGRID_API_KEY|SMTP_PASSWORD)=[^[:space:]]{4,}"
-  "eyJ[A-Za-z0-9_-]*\.[A-Za-z0-9_-]*\.[A-Za-z0-9_-]*"
+# High-confidence structural/branded signatures — precise formats that
+# rarely appear by accident. Enforced everywhere, including test files.
+SECRET_PATTERNS_STRICT=(
+  "eyJ[A-Za-z0-9_-]*\.[A-Za-z0-9_-]*\.[A-Za-z0-9_-]*"    # JWT shape
   "AKIA[0-9A-Z]{16}"                       # AWS access key id
   "ghp_[A-Za-z0-9]{36}"                    # GitHub PAT
   "gho_[A-Za-z0-9]{36}"                    # GitHub OAuth token
@@ -279,6 +304,16 @@ SECRET_PATTERNS=(
   '-----BEGIN[A-Z0-9 ]*PRIVATE KEY-----'
 )
 
+# Generic keyword heuristics — only check the KEY name, not whether the
+# VALUE looks like a real secret, so they misfire on test fixtures like
+# token="invalid" or password="securepass". [FIX-12] These WARN instead of
+# FAIL inside test files; everywhere else they still hard-fail as before.
+SECRET_PATTERNS_GENERIC=(
+  "['\"]?(password|passwd|secret|token|api[_-]?key)['\"]?[[:space:]]*[:=][[:space:]]*['\"][^'\"]{4,}"
+  "['\"]?(password|passwd|secret|token|api[_-]?key)['\"]?[[:space:]]*:[[:space:]]*[^[:space:]'\"]{4,}"  # [FIX-10] unquoted yaml-style
+  "^(PASSWORD|SECRET|TOKEN|API_KEY|SENDGRID_API_KEY|SMTP_PASSWORD)=[^[:space:]]{4,}"
+)
+
 SECRET_FOUND=0
 for file in "${STAGED_FILES_ARR[@]}"; do
   [[ ! -f "$file" ]] && continue
@@ -286,10 +321,22 @@ for file in "${STAGED_FILES_ARR[@]}"; do
 
   if is_text_content "$file"; then   # [FIX-3]
     content="$(git show ":$file" 2>/dev/null || true)"   # fetch once, not per-pattern
-    for pattern in "${SECRET_PATTERNS[@]}"; do
+
+    for pattern in "${SECRET_PATTERNS_STRICT[@]}"; do
       if grep -Ei -- "$pattern" <<< "$content" >/dev/null; then
         fail "Possible hardcoded secret in '$file' (pattern: $pattern)"
         SECRET_FOUND=1
+      fi
+    done
+
+    for pattern in "${SECRET_PATTERNS_GENERIC[@]}"; do
+      if grep -Ei -- "$pattern" <<< "$content" >/dev/null; then
+        if is_test_file "$file"; then
+          warn "'$file' matches a generic secret-like pattern, likely a test fixture — worth a glance (pattern: $pattern)"
+        else
+          fail "Possible hardcoded secret in '$file' (pattern: $pattern)"
+          SECRET_FOUND=1
+        fi
       fi
     done
   fi
