@@ -96,7 +96,7 @@ async def start_scan(
 async def stream_scan_progress(
     job_id: UUID,
     request: Request,
-    current_user: User = Depends(get_current_user),
+    current_user: User = Depends(get_admin_user),
 ) -> EventSourceResponse:
     job = scanner.get_job(str(job_id))
     if job is None:
