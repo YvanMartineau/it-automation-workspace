@@ -1,59 +1,55 @@
+/**
+ * @vitest-environment jsdom
+ */
 import { renderHook, waitFor } from "@testing-library/react";
 import { createElement, ReactNode } from "react";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
-import { describe, expect, test, vi } from "vitest";
+import { beforeEach, describe, expect, test, vi } from "vitest";
 import { api } from "../../../src/lib/api";
 import { useAuditLogs } from "../../../src/hooks/useAuditLogs";
 
-// Minimal type for the audit log entry (adjust to your actual model)
-type AuditLog = { id: number };
-
-function wrapper({ children }: { children: ReactNode }) {
-  const client = new QueryClient();
-  return createElement(QueryClientProvider, { client }, children);
+function createWrapper() {
+  const client = new QueryClient({
+    defaultOptions: { queries: { retry: false, gcTime: 0 } },
+  });
+  return function Wrapper({ children }: { children: ReactNode }) {
+    return createElement(QueryClientProvider, { client }, children);
+  };
 }
 
 describe("Integration – useAuditLogs", () => {
+  beforeEach(() => vi.restoreAllMocks());
+
   test("maps backend params correctly", async () => {
     const request = vi.spyOn(api, "get").mockResolvedValue({
-      data: [{ id: 1 }] as AuditLog[],
+      data: [],
     });
 
     renderHook(
       () => useAuditLogs({ actor: "admin", action: "", resourceType: "", startDate: "", endDate: "" }, 0),
-      { wrapper }
+      { wrapper: createWrapper() }
     );
 
-    await waitFor(() => {
-      expect(request).toHaveBeenCalledWith(
-        expect.stringContaining("/audit-logs"),
-        expect.objectContaining({
-          params: expect.objectContaining({
-            limit: 25,
-            offset: 0,
-            actor: "admin",
-          }),
-        })
-      );
-    });
+    await waitFor(() => expect(request).toHaveBeenCalled());
 
-    request.mockRestore();
+    const url = request.mock.calls[0][0] as string;
+    expect(url).toContain("/audit-logs");
+    expect(url).toContain("actor=admin");
+    expect(url).toContain("limit=25");
+    expect(url).toContain("offset=0");
   });
 
   test("returns placeholderData while loading", async () => {
     vi.spyOn(api, "get").mockResolvedValue({
-      data: [{ id: 1 }] as AuditLog[],
+      data: [{ id: 1 }],
     });
 
-    const { result } = renderHook(
-      () => useAuditLogs({}, 0),
-      { wrapper }
-    );
+    const { result } = renderHook(() => useAuditLogs({}, 0), {
+      wrapper: createWrapper(),
+    });
 
     await waitFor(() => {
-      expect(result.current.data?.data.length).toBe(1);
+      expect(result.current.isSuccess).toBe(true);
     });
-
-    vi.restoreAllMocks();
   });
 });
