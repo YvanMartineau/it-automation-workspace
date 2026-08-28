@@ -184,7 +184,7 @@ export const quickActionsData: readonly QuickActionItem[] = [
     description: 'Register new device',
     iconName: 'Monitor',
     variant: 'primary',
-    href: '/assets/new',
+    href: '/assets/',
   },
   {
     id: 'qa-2',
@@ -192,7 +192,7 @@ export const quickActionsData: readonly QuickActionItem[] = [
     description: 'Start employee workflow',
     iconName: 'UserPlus',
     variant: 'success',
-    href: '/onboarding/new',
+    href: '/onboarding/',
   },
   {
     id: 'qa-3',
@@ -200,12 +200,12 @@ export const quickActionsData: readonly QuickActionItem[] = [
     description: 'Create custom export',
     iconName: 'FileText',
     variant: 'warning',
-    href: '/reports/new',
+    href: '/reports/',
   },
   {
     id: 'qa-4',
     label: 'View Alerts',
-    description: '23 open issues',
+    description: 'Coming Soon...',
     iconName: 'Bell',
     variant: 'info',
     href: '/alerts',

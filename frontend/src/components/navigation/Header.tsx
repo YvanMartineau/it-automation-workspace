@@ -1,10 +1,14 @@
 import { useAuthStore } from "#/hooks/useAuth";
 import { Button } from "#/components/ui/button";
-import { LogOut, User, Sun, Moon, Bell } from "lucide-react";
+import { LogOut, User, Sun, Moon, Bell, Menu } from "lucide-react";
 import { useTheme } from "next-themes";
 import { useState, useEffect } from "react";
 
-export function Header() {
+interface HeaderProps {
+  onMenuClick: () => void;
+}
+
+export function Header({ onMenuClick }: HeaderProps) {
   const { user, logout } = useAuthStore();
   const { resolvedTheme, setTheme } = useTheme();
   const [mounted, setMounted] = useState(false);
@@ -19,7 +23,7 @@ export function Header() {
   };
 
   return (
-    <header className="glass-header sticky top-0 z-40 flex h-16 items-center justify-between px-6 lg:px-8">
+    <header className="glass-header sticky top-0 z-40 flex h-16 items-center justify-between px-4 sm:px-6 lg:px-8">
       <a
         href="#main-content"
         className="sr-only focus:not-sr-only focus:absolute focus:rounded-md focus:bg-primary focus:px-4 focus:py-2 focus:text-primary-foreground focus:shadow-lg focus:shadow-primary/20 focus:outline-none focus:ring-2 focus:ring-primary/50"
@@ -27,8 +31,19 @@ export function Header() {
         Skip to main content
       </a>
 
-      {/* Breadcrumb / Context */}
-      <div className="flex items-center gap-3">
+      <div className="flex items-center gap-2">
+        {/* Hamburger — mobile/tablet only */}
+        <Button
+          variant="ghost"
+          size="icon"
+          onClick={onMenuClick}
+          className="lg:hidden h-9 w-9 rounded-full text-muted-foreground hover:text-foreground hover:bg-accent/80 transition-colors"
+          aria-label="Open navigation menu"
+        >
+          <Menu className="h-[18px] w-[18px]" aria-hidden="true" />
+        </Button>
+
+        {/* Breadcrumb / Context */}
         <div className="hidden sm:flex items-center gap-2 text-xs text-muted-foreground">
           <span className="font-medium text-foreground/70">IT Automation</span>
           <span className="text-muted-foreground/40">/</span>
@@ -36,7 +51,7 @@ export function Header() {
         </div>
       </div>
 
-      <div className="flex items-center gap-2">
+      <div className="flex items-center gap-1 sm:gap-2">
         {/* Notification bell */}
         <Button
           variant="ghost"
@@ -67,8 +82,8 @@ export function Header() {
           )}
         </Button>
 
-        {/* Divider */}
-        <div className="h-6 w-px bg-border mx-1" aria-hidden="true" />
+        {/* Divider — hidden on smallest screens to save space */}
+        <div className="hidden xs:block h-6 w-px bg-border mx-1" aria-hidden="true" />
 
         {/* User pill */}
         <div className="flex items-center gap-3 rounded-full bg-accent/60 border border-border/50 px-3 py-1.5">

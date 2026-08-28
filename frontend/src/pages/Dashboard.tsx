@@ -109,14 +109,14 @@ interface HealthTrendSectionProps {
 
 function HealthTrendSection({ data }: HealthTrendSectionProps): JSX.Element {
   return (
-    <Card className="lg:col-span-2">
+    <Card className="md:col-span-2 lg:col-span-2 p-3">
       <CardHeader className="pb-2">
-        <div className="flex items-center justify-between">
+        <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
           <div>
             <CardTitle>Device Health Trend</CardTitle>
             <CardDescription>Average health score over last 30 days</CardDescription>
           </div>
-          <div className="flex items-center gap-2" aria-label="Health status legend">
+          <div className="flex flex-wrap items-center gap-2" aria-label="Health status legend">
             <Badge variant="secondary" className="bg-success/8 text-success hover:bg-success/15 border-0 font-medium text-[11px]">
               Healthy
             </Badge>
@@ -145,11 +145,11 @@ function OSDistributionSection({ data }: OSDistributionSectionProps): JSX.Elemen
 
   return (
     <Card>
-      <CardHeader className="pb-2">
+      <CardHeader className="pb-2 p-3">
         <CardTitle>OS Distribution</CardTitle>
         <CardDescription>Breakdown by operating system</CardDescription>
       </CardHeader>
-      <CardContent>
+      <CardContent className='p-3'>
         <OSDistributionChart data={data} total={total} />
       </CardContent>
     </Card>
@@ -163,7 +163,7 @@ interface OnboardingVolumeSectionProps {
 function OnboardingVolumeSection({ data }: OnboardingVolumeSectionProps): JSX.Element {
   return (
     <Card>
-      <CardHeader className="pb-2">
+      <CardHeader className="pb-2 p-3">
         <CardTitle>Onboarding Volume</CardTitle>
         <CardDescription>New employees this month</CardDescription>
       </CardHeader>
@@ -180,7 +180,7 @@ interface AuditActivitySectionProps {
 
 function AuditActivitySection({ items }: AuditActivitySectionProps): JSX.Element {
   return (
-    <Card className="lg:col-span-2">
+    <Card className="lg:col-span-2 p-3">
       <CardHeader className="pb-2">
         <div className="flex items-center justify-between">
           <div>
@@ -204,7 +204,7 @@ function AuditActivitySection({ items }: AuditActivitySectionProps): JSX.Element
 
 function QuickActionsSection(): JSX.Element {
   return (
-    <Card>
+    <Card className='p-3'>
       <CardHeader className="pb-2">
         <CardTitle>Quick Actions</CardTitle>
         <CardDescription>Frequently used operations</CardDescription>
@@ -279,10 +279,7 @@ export default function Dashboard(): JSX.Element {
         <div className="space-y-8">
           <StatsRow stats={data.stats} />
 
-          <section
-            className="grid grid-cols-1 lg:grid-cols-3 gap-6"
-            aria-label="Analytics charts"
-          >
+          <section className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6" aria-label="Analytics charts">
             <HealthTrendSection data={data.healthTrend} />
             <OSDistributionSection data={data.osDistribution} />
           </section>
