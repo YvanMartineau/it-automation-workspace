@@ -267,7 +267,7 @@ async def async_scan_subnet(
 # Device upsert
 # ---------------------------------------------------------------------------
 
-async def _upsert_device(db: AsyncSession, result: ScanResult) -> uuid.UUID | None:
+async def _upsert_device(db: AsyncSession, result: ScanResult) -> UUID | None:
     """
     Online hosts: insert-or-update — a real, current asset.
     Offline hosts: UPDATE ONLY. An IP that never answered a ping was never
