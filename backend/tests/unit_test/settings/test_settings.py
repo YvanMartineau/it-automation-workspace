@@ -1,7 +1,26 @@
+# backend/tests/unit_test/settings/test_settings.py
 import pytest
 from pydantic import ValidationError
+from pydantic_settings import SettingsConfigDict
 
 from settings import Settings, get_settings
+
+
+@pytest.fixture(autouse=True)
+def disable_env_file(monkeypatch):
+    """Disable .env file loading for all tests by patching model_config."""
+    # Patch the model_config directly on the Settings class
+    original_config = Settings.model_config
+    Settings.model_config = SettingsConfigDict(
+        env_file=None,
+        env_file_encoding=None,
+        # Preserve other config options from original
+        extra=original_config.get('extra', 'ignore'),
+        arbitrary_types_allowed=original_config.get('arbitrary_types_allowed', True),
+    )
+    yield
+    # Restore original config after test
+    Settings.model_config = original_config
 
 
 @pytest.fixture(autouse=True)

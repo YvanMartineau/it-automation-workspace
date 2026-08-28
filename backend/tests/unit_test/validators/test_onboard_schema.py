@@ -130,11 +130,11 @@ class TestOnboardResponse:
             "job_title": "Backend Developer",
             "status": "PENDING",
             "provisioning_source": "ldap",
-            "temporary_paswrd": "Temp!123456",
+            "temporary_password": "Temp!123456",
         }
         resp = OnboardResponse(**data)
         assert resp.user_id == data["user_id"]
-        assert resp.temporary_paswrd == "Temp!123456"
+        assert resp.temporary_password == "Temp!123456"
 
 
 class TestOffboardResponse:
