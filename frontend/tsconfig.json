@@ -20,6 +20,7 @@
     "noFallthroughCasesInSwitch": true,
     "ignoreDeprecations": "6.0",
     "baseUrl": ".",
+    "types": ["node", "vite/client"], //for e2e test
     "paths": {
       "#/*": ["./src/*"]
     }

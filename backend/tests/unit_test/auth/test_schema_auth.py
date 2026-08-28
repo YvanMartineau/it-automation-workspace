@@ -1,3 +1,4 @@
+#backend/tests/unit_test/auth/test_schema_auth.py
 import pytest
 from pydantic import ValidationError
 from schemas.auth import LoginRequest, TokenResponse

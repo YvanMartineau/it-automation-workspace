@@ -15,9 +15,12 @@ test.describe("Security — XSS & Input Sanitization (E2E)", () => {
     await page.goto("/onboarding");
     await expect(page.getByRole("heading", { name: "Onboarding Tracker" })).toBeVisible();
 
+    // ✅ FIX: Disambiguate the onboarding dialog by filtering for a unique field it contains
+    const onboardingDialog = page.getByRole("dialog").filter({ has: page.getByLabel("Vorname") });
+
     // Open the onboarding dialog
     await page.getByRole("button", { name: "Onboarding starten" }).click();
-    await expect(page.getByRole("dialog")).toBeVisible();
+    await expect(onboardingDialog).toBeVisible();
 
     // Inject XSS payload into the first-name field
     await page.getByLabel("Vorname").fill(xssPayload);
@@ -27,20 +30,16 @@ test.describe("Security — XSS & Input Sanitization (E2E)", () => {
     await page.getByLabel("Berufsbezeichnung").fill("Penetration Tester");
 
     // Submit the form
-    await page.getByRole("button", { name: "Lokal erstellen (DB)" }).click();
+    await page.getByRole("button", { name: "openLDAP" }).click();
 
-    // The dialog should close and the card should appear in the board
-    await expect(page.getByRole("dialog")).not.toBeVisible();
+    // ✅ FIX: Assert that the specific onboarding dialog is now closed
+    await expect(onboardingDialog).not.toBeVisible();
+
+    // The card should appear in the board with the payload rendered as safe text
     await expect(page.getByText(xssPayload).first()).toBeVisible();
 
     // CRITICAL: Ensure the payload is treated as text, not HTML.
-    // If it were rendered as HTML, an <img src=x> element would exist in the DOM.
     const imgInCard = page.locator('img[src="x"]').first();
     await expect(imgInCard).not.toBeVisible();
-
-    // Additionally, Playwright automatically fails the test if a native
-    // `dialog` (alert/confirm/prompt) is triggered. Because we do NOT
-    // expect an alert, the mere absence of a crash/assertion proves the
-    // XSS did not execute.
   });
 });

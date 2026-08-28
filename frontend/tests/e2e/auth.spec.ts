@@ -10,15 +10,29 @@
  */
 import { test, expect, TEST_USER } from "./fixtures";
 
+
 test.describe("Authentication & Authorization (E2E)", () => {
   test.beforeEach(async ({ page }) => {
     await page.goto("/login");
-    await expect(page.getByRole("heading", { name: /IT Automation Dashboard/i })).toBeVisible();
+
+    // Assert we're on the login page, not the dashboard
+    await expect(page.getByRole("button", { name: "Anmelden" })).toBeVisible();
+    // or: await expect(page.getByLabel("E-Mail")).toBeVisible();
   });
+
 
   test("TC-P1-F-028: Login with valid credentials redirects to dashboard and logs event", async ({ page }) => {
     await page.getByLabel("E-Mail").fill(TEST_USER.email);
-    await page.getByLabel("Passwort").fill(TEST_USER.password);
+
+    // Fix: target the password input specifically, not the toggle button
+    await page
+      .getByRole("textbox", { name: "Passwort" })
+      .or(page.getByRole("textbox", { name: /passwort/i }))
+      .fill(TEST_USER.password);
+
+    // Alternative simple fix if the above is too complex:
+    // await page.getByLabel("Passwort").first().fill(TEST_USER.password);
+
     await page.getByRole("button", { name: "Anmelden" }).click();
 
     await expect(page).toHaveURL("/dashboard");
@@ -26,14 +40,23 @@ test.describe("Authentication & Authorization (E2E)", () => {
 
     // Verify the login was recorded in audit logs
     await page.goto("/audit-logs");
-    await expect(page.getByText("Anmeldung").first()).toBeVisible();
+
+    await expect(
+      page
+        .getByRole("row")
+        .filter({ hasText: TEST_USER.email })
+        .filter({ hasText: "auth.login" })
+        .first()
+    ).toBeVisible();
   });
+
 
   test("TC-P1-S-001: Accessing /dashboard without authentication redirects to login", async ({ page }) => {
     await page.evaluate(() => localStorage.clear());
     await page.goto("/dashboard");
     await expect(page).toHaveURL("/login");
   });
+
 
   test("TC-P1-S-002: Expired refresh token redirects to login after failed refresh", async ({ page }) => {
     // Seed an "authenticated" localStorage but force /auth/refresh to fail
@@ -54,6 +77,7 @@ test.describe("Authentication & Authorization (E2E)", () => {
     await page.goto("/dashboard");
     await expect(page).toHaveURL("/login", { timeout: 10000 });
   });
+
 
   test("TC-P1-S-003: Malformed JWT is handled gracefully without 5xx errors", async ({ page }) => {
     // Inject a garbage token into the Zustand store via page.evaluate

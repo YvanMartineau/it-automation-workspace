@@ -2,30 +2,26 @@
  * @file Shared E2E fixtures — Authentication helper
  * @module tests/e2e_test/fixtures
  *
- * These fixtures handle the authentication bootstrap required by the app.
- * Because useAuth.ts only persists `isAuthenticated` to localStorage (not the
- * token), we must:
- *   1. Call /api/auth/login via Playwright's request context to obtain the
- *      httpOnly refresh_token cookie.
- *   2. Seed localStorage so AuthBootstrapGate recognises a session.
- *   3. Hard-navigate to a protected route so the gate calls /auth/refresh.
- *
  * Environment variables (optional):
- *   TEST_USER_EMAIL    — defaults to admin@company.com
- *   TEST_USER_PASSWORD — defaults to TestPassword123!
+ *   TEST_USER_EMAIL    — defaults to admin@dev.de
+ *   TEST_USER_PASSWORD — defaults to DemoAdmin!2026
  */
 import { test as base, expect, Page } from "@playwright/test";
 
 export const TEST_USER = {
-  email: process.env.TEST_USER_EMAIL || "admin@company.com",
-  password: process.env.TEST_USER_PASSWORD || "TestPassword123!",
+  email: process.env.TEST_USER_EMAIL || "admin@dev.de",
+  password: process.env.TEST_USER_PASSWORD || "DemoAdmin!2026",
 };
 
 /**
  * Authenticate a page for E2E tests.
  */
 export async function authenticatePage(page: Page): Promise<void> {
-  // 1. Direct API login → sets httpOnly refresh_token cookie in page context
+  // STEP 0: Navigate to login page first so the browser has a valid origin.
+  //         This allows relative API URLs like /api/auth/login to resolve.
+  await page.goto("/login");
+
+  // STEP 1: Direct API login → sets httpOnly refresh_token cookie in page context
   const loginResponse = await page.request.post("/api/auth/login", {
     data: {
       email: TEST_USER.email,
@@ -37,8 +33,7 @@ export async function authenticatePage(page: Page): Promise<void> {
     `API login failed: ${await loginResponse.text()}`
   ).toBeTruthy();
 
-  // 2. Seed localStorage so AuthBootstrapGate sees an authenticated session
-  await page.goto("/login");
+  // STEP 2: Seed localStorage so AuthBootstrapGate sees an authenticated session
   await page.evaluate(() => {
     localStorage.setItem(
       "it-dashboard-auth",
@@ -46,7 +41,7 @@ export async function authenticatePage(page: Page): Promise<void> {
     );
   });
 
-  // 3. Navigate to dashboard — gate will exchange cookie for access token
+  // STEP 3: Navigate to dashboard — gate will exchange cookie for access token
   await page.goto("/dashboard");
   await expect(page).toHaveURL("/dashboard");
 
@@ -59,7 +54,6 @@ export async function authenticatePage(page: Page): Promise<void> {
 export const test = base.extend<{
   authenticatedPage: Page;
 }>({
-  // Renamed 'use' → 'fixtureUse' to avoid react-hooks/rules-of-hooks false positive
   authenticatedPage: async ({ page }, fixtureUse) => {
     await authenticatePage(page);
     await fixtureUse(page);
