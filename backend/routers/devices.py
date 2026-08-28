@@ -39,6 +39,9 @@ from services.device_service import delete_device as delete_device_service
 from services.device_service import list_devices_paginated
 from services.device_service import update_device as update_device_service
 
+from services.device_service import get_device_counts
+from schemas.device import AssetStatsRead 
+
 router = APIRouter()
 
 
@@ -140,3 +143,14 @@ async def delete_device(
             status_code=status.HTTP_404_NOT_FOUND,
             detail="Device not found",
         )
+
+
+@router.get("/stats", response_model=AssetStatsRead, summary="Aggregate device counts")
+async def get_device_stats(
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+) -> AssetStatsRead:
+    counts = await get_device_counts(db)
+    return AssetStatsRead(
+        total=counts.total, online=counts.online, offline=counts.offline, healthAlerts=counts.health_alerts
+    )

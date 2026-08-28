@@ -13,10 +13,19 @@ import uuid
 from sqlalchemy import func, or_, select
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.ext.asyncio import AsyncSession
-
+from dataclasses import dataclass
+from models.device_health_history import DeviceHealthHistory
 from middleware.audit_middleware import write_audit_log
 from models.device import Device, DeviceStatus
 from schemas.device import DeviceCreate, DeviceUpdate
+
+@dataclass
+class DeviceCounts:
+    total: int
+    online: int
+    offline: int
+    health_alerts: int
+    critical_alerts: int
 
 
 class DeviceConflictError(Exception):
@@ -181,3 +190,52 @@ async def delete_device(db: AsyncSession, actor: str, device_id: uuid.UUID) -> N
     )
     await db.delete(device)
     await db.commit()
+
+
+async def get_health_alert_counts(db: AsyncSession) -> tuple[int, int]:
+    """
+    Devices whose MOST RECENT health-history score is below threshold.
+    This is the ONLY place this should ever be computed — both
+    GET /dashboard and GET /devices/stats call this, specifically because
+    two independent implementations (one reading history, one deriving
+    client-side from live status/cpu/memory) is what caused the Dashboard
+    and Assets pages to disagree.
+    """
+    ranked = (
+        select(
+            DeviceHealthHistory.device_id,
+            DeviceHealthHistory.health_score,
+            func.row_number()
+            .over(partition_by=DeviceHealthHistory.device_id, order_by=DeviceHealthHistory.recorded_at.desc())
+            .label("rn"),
+        )
+    ).subquery()
+
+    stmt = (
+        select(
+            func.count().filter(ranked.c.health_score < 85).label("alerts"),
+            func.count().filter(ranked.c.health_score < 70).label("critical"),
+        )
+        .select_from(ranked)
+        .where(ranked.c.rn == 1)
+    )
+    row = (await db.execute(stmt)).one()
+    return row.alerts or 0, row.critical or 0
+
+
+async def get_device_counts(db: AsyncSession) -> DeviceCounts:
+    """Total/online/offline + health alerts — one shared aggregate for both pages."""
+    device_stmt = select(
+        func.count(Device.id).label("total"),
+        func.count(Device.id).filter(Device.status == DeviceStatus.online).label("online"),
+        func.count(Device.id).filter(Device.status == DeviceStatus.offline).label("offline"),
+    )
+    row = (await db.execute(device_stmt)).one()
+    health_alerts, critical_alerts = await get_health_alert_counts(db)
+    return DeviceCounts(
+        total=row.total or 0,
+        online=row.online or 0,
+        offline=row.offline or 0,
+        health_alerts=health_alerts,
+        critical_alerts=critical_alerts,
+    )

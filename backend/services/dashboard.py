@@ -124,7 +124,7 @@ class DashboardService:
         online = device_row.online or 0
         offline = device_row.offline or 0
 
-        health_alerts, critical_alerts = await self._get_health_alert_counts()
+        health_alerts, critical_alerts = await self.get_stats()
 
         return DashboardStats(
             totalAssets=total,
@@ -137,7 +137,19 @@ class DashboardService:
             criticalAlerts=critical_alerts,
         )
 
-    async def _get_health_alert_counts(self) -> tuple[int, int]:
+    async def get_stats(self) -> DashboardStats:
+        from services.device_service import get_device_counts  # or move import to top of file
+        counts = await get_device_counts(self.db)
+        return DashboardStats(
+            totalAssets=counts.total,
+            totalAssetsChange=0,
+            online=counts.online,
+            onlinePercentage=round((counts.online / counts.total * 100), 1) if counts.total else 0.0,
+            offline=counts.offline,
+            offlineChange=0,
+            healthAlerts=counts.health_alerts,
+            criticalAlerts=counts.critical_alerts,
+        )
         """
         Counts devices whose MOST RECENT health-history reading falls
         below the same thresholds used by get_health_trend (>=85 healthy,

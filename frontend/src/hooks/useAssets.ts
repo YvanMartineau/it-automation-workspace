@@ -4,7 +4,7 @@ import { useState, useEffect } from "react";
 import { toast } from "sonner";
 import { api } from "#/lib/api";
 import { deriveAssetHealth } from "#/lib/assetHealth";
-import { ASSETS_QUERY_KEY, ASSET_STATS_QUERY_KEY, ASSET_STATS_SAMPLE_SIZE } from "#/lib/constants";
+import { ASSETS_QUERY_KEY, ASSET_STATS_QUERY_KEY} from "#/lib/constants";
 import type { AssetFilters, PaginatedAssetList, AssetStats } from "#/types/asset";
 
 /**
@@ -59,22 +59,8 @@ export function useAssetStats() {
   return useQuery<AssetStats>({
     queryKey: ASSET_STATS_QUERY_KEY,
     queryFn: async () => {
-      const response = await api.get<PaginatedAssetList>("/devices/", {
-        params: { page: 1, pageSize: ASSET_STATS_SAMPLE_SIZE },
-      });
-      const devices = response.data.data;
-
-      let online = 0;
-      let offline = 0;
-      let healthAlerts = 0;
-      for (const device of devices) {
-        if (device.status === "online") online += 1;
-        if (device.status === "offline") offline += 1;
-        const health = deriveAssetHealth(device);
-        if (health === "warning" || health === "critical") healthAlerts += 1;
-      }
-
-      return { total: response.data.meta.totalItems, online, offline, healthAlerts };
+      const { data } = await api.get<AssetStats>("/devices/stats");
+      return data;
     },
     staleTime: 30_000,
     gcTime: 5 * 60_000,

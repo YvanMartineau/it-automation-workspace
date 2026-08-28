@@ -47,12 +47,12 @@ from dataclasses import dataclass
 from datetime import datetime, timezone
 from typing import Any, Literal
 from uuid import UUID
-
+from sqlalchemy import update
 import nmap
 import psutil
 from sqlalchemy.dialects.postgresql import insert as pg_insert
 from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker
-
+from models.device_health_history import DeviceHealthHistory
 from models.device import Device, DeviceStatus
 from middleware.audit_middleware import write_audit_log
 
@@ -230,7 +230,7 @@ async def async_scan_subnet(
                 result.latency_ms = result_latency_ms
                 nm_os = nmap.PortScanner()
                 try:
-                    await loop.run_in_executor(None, nm_os.scan, host, None, "-O -F")
+                    await loop.run_in_executor(None, nm_os.scan, host, None, "--privileged -O -F")
                     os_info, open_ports = _parse_os_and_ports(nm_os, host)
                     result.os_info = os_info
                     result.open_ports = open_ports
@@ -267,44 +267,57 @@ async def async_scan_subnet(
 # Device upsert
 # ---------------------------------------------------------------------------
 
-async def _upsert_device(db: AsyncSession, result: ScanResult) -> None:
-    status = DeviceStatus.online if result.status == "up" else DeviceStatus.offline
+async def _upsert_device(db: AsyncSession, result: ScanResult) -> uuid.UUID | None:
+    """
+    Online hosts: insert-or-update — a real, current asset.
+    Offline hosts: UPDATE ONLY. An IP that never answered a ping was never
+    a real asset, so a non-response must never create a row. Returns the
+    device's id if a row was written, so run_scan() can attach a health
+    score to it — None if a down host had no existing row to update.
+    """
     now = datetime.now(timezone.utc)
 
-    stmt = pg_insert(Device).values(
-        ip_address=result.ip_address,
-        hostname=result.hostname,
-        mac_address=result.mac_address,
-        status=status,
-        os_info=result.os_info,
-        latency_ms=result.latency_ms,
-        open_ports=result.open_ports,
-        cpu_percent=result.cpu_percent,
-        memory_percent=result.memory_percent,
-        last_seen=now if status == DeviceStatus.online else None,
-    )
-    stmt = stmt.on_conflict_do_update(
-        index_elements=[Device.ip_address],
-        set_={
-            "hostname": stmt.excluded.hostname,
-            "mac_address": stmt.excluded.mac_address,
-            "status": stmt.excluded.status,
-            "os_info": stmt.excluded.os_info,
-            "latency_ms": stmt.excluded.latency_ms,
-            "open_ports": stmt.excluded.open_ports,
-            # cpu_percent/memory_percent only ever come from the local-host
-            # psutil path. For every other host ScanResult.cpu_percent is
-            # None — keep whatever was already stored rather than blanking
-            # it out on every remote-host scan pass.
-            "cpu_percent": stmt.excluded.cpu_percent if result.cpu_percent is not None else Device.cpu_percent,
-            "memory_percent": (
-                stmt.excluded.memory_percent if result.memory_percent is not None else Device.memory_percent
-            ),
-            "last_seen": now if status == DeviceStatus.online else Device.last_seen,
-        },
-    )
-    await db.execute(stmt)
+    if result.status == "up":
+        stmt = pg_insert(Device).values(
+            ip_address=result.ip_address,
+            hostname=result.hostname,
+            mac_address=result.mac_address,
+            status=DeviceStatus.online,
+            os_info=result.os_info,
+            latency_ms=result.latency_ms,
+            open_ports=result.open_ports,
+            cpu_percent=result.cpu_percent,
+            memory_percent=result.memory_percent,
+            last_seen=now,
+        )
+        stmt = stmt.on_conflict_do_update(
+            index_elements=[Device.ip_address],
+            set_={
+                "hostname": stmt.excluded.hostname,
+                "mac_address": stmt.excluded.mac_address,
+                "status": stmt.excluded.status,
+                "os_info": stmt.excluded.os_info,
+                "latency_ms": stmt.excluded.latency_ms,
+                "open_ports": stmt.excluded.open_ports,
+                "cpu_percent": stmt.excluded.cpu_percent if result.cpu_percent is not None else Device.cpu_percent,
+                "memory_percent": (
+                    stmt.excluded.memory_percent if result.memory_percent is not None else Device.memory_percent
+                ),
+                "last_seen": now,
+            },
+        ).returning(Device.id)
+        row = (await db.execute(stmt)).one_or_none()
+        return row.id if row else None
 
+    # status == "down" — update only, never insert.
+    stmt = (
+        update(Device)
+        .where(Device.ip_address == result.ip_address)
+        .values(status=DeviceStatus.offline)
+        .returning(Device.id)
+    )
+    row = (await db.execute(stmt)).one_or_none()
+    return row.id if row else None
 
 # ---------------------------------------------------------------------------
 # Job orchestration
@@ -352,7 +365,11 @@ async def run_scan(
         async with session_factory() as db:
             try:
                 for result in results:
-                    await _upsert_device(db, result)
+                    device_id = await _upsert_device(db, result)
+                    if device_id is not None:
+                        score = _compute_health_score(result)
+                        if score is not None:
+                            db.add(DeviceHealthHistory(device_id=device_id, health_score=score))
                 await db.commit()
             except Exception:
                 await db.rollback()
@@ -389,3 +406,32 @@ async def run_scan(
                 )
         except Exception:
             logger.exception("Failed to write audit log for failed scan job %s", job_id_str)
+
+
+# ---------------------------------------------------------------------------
+# Health
+# ---------------------------------------------------------------------------
+def _compute_health_score(result: ScanResult) -> float | None:
+    """
+    0-100, or None for offline hosts. Offline devices are deliberately
+    excluded from health scoring entirely (Option B) — they're already
+    represented by the Offline stat card, so folding them into "unhealthy"
+    too would double-count the same signal under two different labels.
+    Health Alerts is reserved for devices that ARE reachable but under
+    resource strain.
+
+    Online with no cpu/memory data (every remote host today — see this
+    module's docstring on local-host-only psutil enrichment) scores 100:
+    absence of evidence isn't evidence of a problem.
+    """
+    if result.status != "up":
+        return None
+    score = 100.0
+    for pct in (result.cpu_percent, result.memory_percent):
+        if pct is None:
+            continue
+        if pct > 95:
+            score -= 40
+        elif pct > 80:
+            score -= 20
+    return max(score, 0.0)

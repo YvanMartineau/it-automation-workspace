@@ -43,7 +43,12 @@ class DeviceRead(BaseModel):
     created_at: datetime
     updated_at: datetime | None
 
-
+class AssetStatsRead(BaseModel):
+    total: int
+    online: int
+    offline: int
+    healthAlerts: int
+    
 class PaginationMeta(BaseModel):
     """
     Deliberately camelCase field NAMES (not aliases) — unlike DeviceRead

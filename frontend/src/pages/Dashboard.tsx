@@ -6,7 +6,7 @@
  */
 
 import { useMemo } from 'react';
-import { Monitor, Wifi, WifiOff, AlertTriangle, RefreshCw, Loader2 } from 'lucide-react';
+import { Monitor, Wifi, WifiOff, AlertTriangle, Loader2 } from 'lucide-react';
 import { Button } from '#/components/ui/button';
 import {
   Card,
@@ -40,13 +40,15 @@ function DashboardHeader(): JSX.Element {
           Real-time overview of your infrastructure, asset health, and onboarding pipelines.
         </p>
       </div>
+      {/*  //Dont forget to reimport RefreshCw 
       <Button 
         className="shrink-0 gap-2 rounded-lg px-4 shadow-sm" 
         aria-label="Run network scan to discover new assets"
       >
         <RefreshCw className="h-4 w-4" aria-hidden="true" />
         Run Network Scan
-      </Button>
+      </Button> 
+      */}
     </header>
   );
 }
