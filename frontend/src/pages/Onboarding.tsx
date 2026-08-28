@@ -136,34 +136,27 @@ function PipelineStat({ label, value, icon, color, trend }: PipelineStatProps): 
   return (
     <div
       className={cn(
-        "flex items-center gap-3 rounded-xl px-4 py-3",
-        "border border-border/60",
-        "bg-card",
-        "shadow-sm"
+        "flex items-center gap-3 rounded-xl px-4 py-3 min-w-0",
+        "border border-border/60 bg-card shadow-sm"
       )}
     >
-      <div
-        className={cn(
-          "flex h-9 w-9 shrink-0 items-center justify-center rounded-lg",
-          c.iconBg,
-          "ring-1",
-          c.ring
-        )}
-      >
+      <div className={cn("flex h-9 w-9 shrink-0 items-center justify-center rounded-lg", c.iconBg, "ring-1", c.ring)}>
         <span className={c.text}>{icon}</span>
       </div>
-      <div>
-        <p className={cn("text-lg font-bold tabular-nums tracking-tight leading-none", c.text)}>
-          {value}
-        </p>
-        <p className="text-[11px] font-medium text-muted-foreground/60 mt-1 flex items-center gap-1">
-          {label}
+      <div className="min-w-0 flex-1">
+        <div className="flex items-baseline gap-1.5 flex-wrap">
+          <p className={cn("text-lg font-bold tabular-nums tracking-tight leading-none", c.text)}>
+            {value}
+          </p>
           {trend && (
-            <span className="inline-flex items-center gap-0.5 text-success text-[10px]">
-              <TrendingUp className="h-3 w-3" />
+            <span className="inline-flex items-center gap-0.5 text-success text-[10px] font-semibold shrink-0">
+              <TrendingUp className="h-3 w-3" aria-hidden="true" />
               {trend}
             </span>
           )}
+        </div>
+        <p className="text-[11px] font-medium text-muted-foreground/60 mt-1 truncate">
+          {label}
         </p>
       </div>
     </div>
@@ -416,58 +409,93 @@ export default function OnboardingPage(): JSX.Element {
       </section>
 
       {/* Kanban Board */}
-      <section aria-label="Onboarding-Pipeline">
-        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-6 gap-4">
-          {COLUMN_CONFIG.map((column) => {
-            const columnRecords = records?.filter((r) => r.workflow_status === column.id && r.status !== "offboarded") || [];
-            const isCollapsed = collapsedColumns.has(column.id);
-            const isCompletedColumn = column.id === "COMPLETED";
+      {/* Active Pipeline */}
+<section aria-label="Aktive Onboarding-Pipeline">
+  <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-5 gap-4">
+    {COLUMN_CONFIG.filter((column) => column.isActive).map((column) => {
+      const columnRecords =
+        records?.filter((r) => r.workflow_status === column.id && r.status !== "offboarded") || [];
 
-            return (
-              <div key={column.id} className="flex flex-col gap-3 min-w-0">
-                <ColumnHeader
-                  config={column}
-                  count={columnRecords.length}
-                  isCollapsed={isCollapsed}
-                  onToggleCollapse={() => toggleColumn(column.id)}
-                  isCollapsible={isCompletedColumn}
-                />
-
-                {/* Column Content */}
-                <div
-                  className={cn(
-                    "flex flex-col gap-3 transition-all duration-300 ease-premium overflow-hidden",
-                    isCollapsed ? "max-h-0 opacity-0" : "max-h-[2000px] opacity-100"
-                  )}
-                >
-                  {columnRecords.length === 0 ? (
-                    <EmptyColumnState />
-                  ) : (
-                    columnRecords.map((record) => (
-                      <OnboardingCard
-                        key={record.user_id}
-                        record={record}
-                        compact={isCompletedColumn}
-                      />
-                    ))
-                  )}
-                </div>
-
-                {/* Collapsed Preview for Completed */}
-                {isCollapsed && isCompletedColumn && columnRecords.length > 0 && (
-                  <button
-                    onClick={() => toggleColumn(column.id)}
-                    className="flex items-center justify-center gap-2 rounded-xl border border-dashed border-border/50 py-3 text-xs text-muted-foreground/50 hover:text-muted-foreground hover:border-border/80 hover:bg-accent/30 transition-all"
-                  >
-                    <ChevronRight className="h-3.5 w-3.5" />
-                    {columnRecords.length} abgeschlossene Vorgänge
-                  </button>
-                )}
-              </div>
-            );
-          })}
+      return (
+        <div key={column.id} className="flex flex-col gap-3 min-w-0">
+          <ColumnHeader
+            config={column}
+            count={columnRecords.length}
+            isCollapsed={false}
+            onToggleCollapse={() => {}}
+            isCollapsible={false}
+          />
+          <div className="flex flex-col gap-3">
+            {columnRecords.length === 0 ? (
+              <EmptyColumnState />
+            ) : (
+              columnRecords.map((record) => (
+                <OnboardingCard key={record.user_id} record={record} />
+              ))
+            )}
+          </div>
         </div>
-      </section>
+      );
+    })}
+  </div>
+</section>
+
+{/* Completed — pulled out of the kanban row, own dense grid */}
+{(() => {
+  const completedRecords =
+    records?.filter((r) => r.workflow_status === "COMPLETED" && r.status !== "offboarded") || [];
+  const isCollapsed = collapsedColumns.has("COMPLETED");
+
+  if (completedRecords.length === 0) return null;
+
+  return (
+    <section className="space-y-4" aria-label="Abgeschlossene Onboarding-Vorgänge">
+      <button
+        onClick={() => toggleColumn("COMPLETED")}
+        className={cn(
+          "flex items-center gap-3 w-full rounded-xl border border-border/60 bg-card px-4 py-3",
+          "shadow-sm transition-all duration-200",
+          "hover:bg-accent/30 hover:border-border/80"
+        )}
+      >
+        <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-lg bg-success/10 ring-1 ring-success/15">
+          <CheckCircle2 className="h-4 w-4 text-success" aria-hidden="true" />
+        </div>
+        <div className="flex-1 text-left">
+          <h3 className="text-sm font-semibold text-foreground/80">Abgeschlossene Vorgänge</h3>
+          <p className="text-[11px] text-muted-foreground/50">
+            {COLUMN_CONFIG.find((column) => column.id === "COMPLETED")?.description}
+          </p>
+        </div>
+        <div className="flex items-center gap-2">
+          <span className="text-[11px] text-muted-foreground/40 font-medium tabular-nums">
+            {completedRecords.length}
+          </span>
+          <ChevronDown
+            className={cn(
+              "h-4 w-4 text-muted-foreground/40 transition-transform duration-300",
+              !isCollapsed && "rotate-180"
+            )}
+            aria-hidden="true"
+          />
+        </div>
+      </button>
+
+      <div
+        className={cn(
+          "overflow-hidden transition-all duration-500 ease-premium",
+          !isCollapsed ? "max-h-[3000px] opacity-100" : "max-h-0 opacity-0"
+        )}
+      >
+        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-3">
+          {completedRecords.map((record) => (
+            <OnboardingCard key={record.user_id} record={record} compact />
+          ))}
+        </div>
+      </div>
+    </section>
+  );
+})()}
 
       {/* Offboarding Section */}
       {offboardedRecords.length > 0 && (

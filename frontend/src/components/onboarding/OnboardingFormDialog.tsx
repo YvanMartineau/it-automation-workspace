@@ -206,21 +206,23 @@ export function OnboardingFormDialog() {
                   ) : (
                     <Plus className="h-4 w-4" />
                   )}
-                  {createMutation.isPending ? "Wird erstellt…" : "Lokal erstellen (DB)"}
+                  {createMutation.isPending ? "Wird erstellt…" : "OpenLDAP"}
                 </Button>
 
                 <TooltipProvider>
                   <Tooltip>
-                    <TooltipTrigger>
-                      <Button
-                        type="button"
-                        variant="outline"
-                        className="flex-1 rounded-xl h-10 gap-2 opacity-60 cursor-not-allowed"
-                        disabled
-                      >
-                        <Lock className="h-3.5 w-3.5" />
-                        Entra ID
-                      </Button>
+                    <TooltipTrigger
+                      type="button"
+                      disabled
+                      className={cn(
+                        "inline-flex flex-1 items-center justify-center gap-2 whitespace-nowrap rounded-xl text-sm font-medium",
+                        "border border-input bg-background text-foreground",
+                        "h-10 px-3 opacity-60 cursor-not-allowed",
+                        "focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2"
+                      )}
+                    >
+                      <Lock className="h-3.5 w-3.5" aria-hidden="true" />
+                      Entra ID
                     </TooltipTrigger>
                     <TooltipContent side="top" className="rounded-xl">
                       <p className="text-xs">Entra ID Lizenz erforderlich (Demnächst verfügbar)</p>
