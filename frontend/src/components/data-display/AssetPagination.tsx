@@ -34,7 +34,7 @@ export function AssetPagination({
         {totalItems.toLocaleString()} Assets gesamt
       </div>
 
-      <div className="flex items-center gap-5">
+      <div className="flex flex-wrap items-center justify-center gap-3 sm:gap-5">
         {/* Page size selector */}
         <div className="flex items-center gap-2">
           <span className="text-xs text-muted-foreground/60 font-medium">Zeilen</span>

@@ -102,7 +102,7 @@ export function QuickActions({ actions }: QuickActionsProps): JSX.Element {
               <Icon className={cn('h-5 w-5', config.iconColor)} />
             </div>
             <div className="min-w-0">
-              <p className="text-sm font-semibold text-foreground/90">{action.label}</p>
+              <p className="text-sm font-semibold text-foreground/90 shrink-0 break-words">{action.label}</p>
               <p className="text-xs text-muted-foreground/70 truncate mt-0.5">{action.description}</p>
             </div>
           </a>

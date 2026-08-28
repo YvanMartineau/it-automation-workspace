@@ -124,9 +124,9 @@ export function ScanDialog({ open, onOpenChange, scanState, onMinimize, onRetry 
                     <span className="absolute inline-flex h-full w-full animate-ping rounded-full bg-primary opacity-60" />
                     <span className="relative inline-flex h-2.5 w-2.5 rounded-full bg-primary" />
                   </span>
-                  <div className="flex flex-1 items-center justify-between text-sm">
-                    <span className="text-muted-foreground/60 text-xs font-medium">Aktueller Host</span>
-                    <span className="font-mono font-semibold text-xs tabular-nums text-foreground/80">{currentHost}</span>
+                  <div className="flex flex-1 items-center justify-between gap-3 text-sm min-w-0">
+                    <span className="text-muted-foreground/60 text-xs font-medium shrink-0">Aktueller Host</span>
+                    <span className="font-mono font-semibold text-xs tabular-nums text-foreground/80 truncate">{currentHost}</span>
                   </div>
                 </div>
               )}

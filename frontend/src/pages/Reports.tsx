@@ -193,7 +193,7 @@ export default function ReportsPage(): JSX.Element {
       </section>
 
       {/* History Table */}
-      <Card className="overflow-hidden">
+      <Card className="overflow-hidden p-3">
         <CardHeader className="flex flex-row items-center gap-3 pb-4">
           <div className="flex h-9 w-9 items-center justify-center rounded-xl bg-primary/10 ring-1 ring-primary/20">
             <History className="h-4 w-4 text-primary" />
