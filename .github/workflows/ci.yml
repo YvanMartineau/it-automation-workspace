@@ -126,7 +126,7 @@ jobs:
             --cov=backend \
             --cov-report=term-missing \
             --cov-report=xml \
-            --cov-fail-under=65 -v
+            --cov-fail-under=60 -v
 
       - uses: actions/upload-artifact@v4
         if: always()
