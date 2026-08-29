@@ -39,14 +39,14 @@ class TestLoginRequest:
 class TestTokenResponse:
     def test_default_token_type(self):
         resp = TokenResponse(access_token=_tok())
-        assert resp.token_type == "bearer"
+        assert resp.token_type == "bearer"  # nosec S105
 
     def test_from_attributes(self):
         class FakeToken:
             # 3 chars -> does NOT trigger {4,} rule, keep short
-            access_token = "abc"
-            token_type = "bearer"
+            access_token = "abc"  # nosec S105
+            token_type = "bearer"  # nosec S105
 
         resp = TokenResponse.model_validate(FakeToken())
-        assert resp.access_token == "abc"
-        assert resp.token_type == "bearer"
+        assert resp.access_token == "abc"  # nosec S105
+        assert resp.token_type == "bearer"  # nosec S105
