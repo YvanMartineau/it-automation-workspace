@@ -14,7 +14,7 @@ class Base(DeclarativeBase):
 
 
 engine = create_async_engine(
-    # I Commented this out since Aiven is not ready yet, so we use local postgres for now. we move DATABASE_URL to DEV_DATABASE_URL.
+    # we use local postgres for now.
     # settings.DATABASE_URL, echo=False, pool_pre_ping=True, pool_size=5, max_overflow=10,
     settings.DEV_DATABASE_URL,
     echo=False,

@@ -44,10 +44,7 @@ _OS_COLORS: dict[str, str] = {
 _FALLBACK_OS_COLOR = "hsl(280 65% 60%)"
 
 # ---------------------------------------------------------------------------
-# Audit action -> display type. Only device.create/update/delete and
-# user.onboard are actually written anywhere in the codebase today
-# (see device_service.py, onboarding_pipeline.py); anything else falls
-# back to "update" rather than guessing.
+# Audit action -> display type.
 # ---------------------------------------------------------------------------
 _ACTION_TYPE_MAP: dict[str, AuditActivityType] = {
     "device.create": "create",
@@ -70,14 +67,6 @@ def _activity_type_for(action: str) -> AuditActivityType:
 
 
 def _target_for(log: AuditLog) -> tuple[str, str]:
-    """
-    Best-effort human-readable target derived from what's actually in the
-    payload — target_id itself is just a UUID string, never a hostname.
-    device.update payloads only contain the CHANGED fields (see
-    device_service.update_device), so hostname/ip won't always be present;
-    falls back to a truncated id rather than joining back to devices,
-    which would also break for since-deleted rows.
-    """
     payload = log.payload or {}
     if log.target_type == "device":
         name = (
@@ -112,34 +101,11 @@ class DashboardService:
     def __init__(self, db: AsyncSession):
         self.db = db
 
+    # -----------------------------------------------------------------------
+    # Correct single get_stats() implementation
+    # -----------------------------------------------------------------------
     async def get_stats(self) -> DashboardStats:
-        """Total/online/offline in one round-trip; health alerts in a second."""
-        device_stmt = select(
-            func.count(Device.id).label("total"),
-            func.count(Device.id).filter(Device.status == DeviceStatus.online).label("online"),
-            func.count(Device.id).filter(Device.status == DeviceStatus.offline).label("offline"),
-        )
-        device_row = (await self.db.execute(device_stmt)).one()
-
-        total = device_row.total or 0
-        online = device_row.online or 0
-        offline = device_row.offline or 0
-
-        health_alerts, critical_alerts = await self.get_stats()
-
-        return DashboardStats(
-            totalAssets=total,
-            totalAssetsChange=0,  # no historical device-count snapshot exists to diff against
-            online=online,
-            onlinePercentage=round((online / total * 100), 1) if total else 0.0,
-            offline=offline,
-            offlineChange=0,  # same limitation as above
-            healthAlerts=health_alerts,
-            criticalAlerts=critical_alerts,
-        )
-
-    async def get_stats(self) -> DashboardStats:
-        from services.device_service import get_device_counts  # or move import to top of file
+        from services.device_service import get_device_counts
 
         counts = await get_device_counts(self.db)
         return DashboardStats(
@@ -154,43 +120,8 @@ class DashboardService:
             healthAlerts=counts.health_alerts,
             criticalAlerts=counts.critical_alerts,
         )
-        """
-        Counts devices whose MOST RECENT health-history reading falls
-        below the same thresholds used by get_health_trend (>=85 healthy,
-        70-84 warning, <70 critical). Deliberately queries
-        device_health_history alone — never joins back to Device — since
-        DeviceHealthHistory.device_id is typed Integer while Device.id is
-        a UUID primary key; comparing the two would raise a type-mismatch
-        error at the database level. That mismatch predates this file;
-        flagging it rather than fixing it since models/device_health_history.py
-        is out of scope here.
-        """
-        ranked = (
-            select(
-                DeviceHealthHistory.device_id,
-                DeviceHealthHistory.health_score,
-                func.row_number()
-                .over(
-                    partition_by=DeviceHealthHistory.device_id,
-                    order_by=DeviceHealthHistory.recorded_at.desc(),
-                )
-                .label("rn"),
-            )
-        ).subquery()
-
-        stmt = (
-            select(
-                func.count().filter(ranked.c.health_score < 85).label("alerts"),
-                func.count().filter(ranked.c.health_score < 70).label("critical"),
-            )
-            .select_from(ranked)
-            .where(ranked.c.rn == 1)
-        )
-        row = (await self.db.execute(stmt)).one()
-        return row.alerts or 0, row.critical or 0
 
     async def get_health_trend(self, days: int = 30) -> list[HealthTrendPoint]:
-        """Daily average health score from history table, last `days` days."""
         since = datetime.utcnow() - timedelta(days=days)
         day_bucket = func.date(DeviceHealthHistory.recorded_at).label("day")
 
@@ -216,7 +147,6 @@ class DashboardService:
         return points
 
     async def get_os_distribution(self) -> list[OSDistributionItem]:
-        """Buckets Device.os_info into a small set of display categories via SQL CASE."""
         os_bucket = case(
             (Device.os_info.is_(None), "Unknown"),
             (Device.os_info.ilike("%windows 11%"), "Windows 11"),
@@ -253,7 +183,6 @@ class DashboardService:
         ]
 
     async def get_onboarding_volume(self, weeks: int = 4) -> list[OnboardingVolumePoint]:
-        """Weekly completed/in-progress/failed counts from onboarded_user.job_status."""
         since = datetime.now(UTC) - timedelta(weeks=weeks)
         week_bucket = func.date_trunc("week", OnboardedUser.created_at).label("week_start")
 
@@ -287,7 +216,6 @@ class DashboardService:
         ]
 
     async def get_recent_audit(self, limit: int = 5) -> list[AuditActivityItem]:
-        """Append-only audit log — cheap ORDER BY timestamp DESC LIMIT."""
         stmt = select(AuditLog).order_by(AuditLog.timestamp.desc()).limit(limit)
         rows = await self.db.execute(stmt)
 
@@ -308,7 +236,6 @@ class DashboardService:
         return items
 
     async def get_snapshot(self) -> DashboardSnapshot:
-        """Compose all aggregations. Frontend makes ONE request."""
         return DashboardSnapshot(
             stats=await self.get_stats(),
             healthTrend=await self.get_health_trend(),
@@ -319,14 +246,6 @@ class DashboardService:
         )
 
     async def get_snapshot_cached(self) -> DashboardSnapshot:
-        """
-        Optional 30s in-memory cache in front of get_snapshot(), for the
-        Aiven max_connections=20 budget mentioned in routers/dashboard.py's
-        docstring, if the dashboard ends up polled/auto-refreshed. NOT
-        wired into the router — that call site is untouched (out of
-        scope). Swap `service.get_snapshot()` for
-        `service.get_snapshot_cached()` there if you want this behavior.
-        """
         global _dashboard_cache, _cache_ttl
         async with _cache_lock:
             if (

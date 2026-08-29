@@ -135,7 +135,7 @@ class TestOnboardResponse:
         }
         resp = OnboardResponse(**data)
         assert resp.user_id == data["user_id"]
-        assert resp.temporary_password == "Temp!123456"
+        assert resp.temporary_password == "Temp!123456"  # noqa: S105
 
 
 class TestOffboardResponse:

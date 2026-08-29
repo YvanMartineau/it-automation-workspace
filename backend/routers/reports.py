@@ -19,7 +19,7 @@ router = APIRouter(prefix="/reports", tags=["Reports"])
     response_model=ReportJobResponse,
     status_code=status.HTTP_202_ACCEPTED,
     summary="Trigger manual PDF report generation",
-    description="Queues PDF generation via BackgroundTask. Returns a job ID to poll for completion.",
+    description="Queues PDF generation via BackgroundTask. Returns a job ID.",
 )
 async def trigger_report(
     payload: ReportTriggerRequest,

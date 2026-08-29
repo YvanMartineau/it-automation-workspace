@@ -9,6 +9,9 @@ from google.auth.transport.requests import Request
 from google.oauth2.credentials import Credentials
 from settings import get_settings
 
+# Public Google OAuth2 endpoint (not a secret)
+GMAIL_OAUTH_TOKEN_URI = "https://oauth2.googleapis.com/token"
+
 logger = logging.getLogger(__name__)
 
 
@@ -19,7 +22,7 @@ def _get_gmail_oauth2_access_token() -> str:
     creds = Credentials(
         token=None,
         refresh_token=get_settings.GMAIL_OAUTH_REFRESH_TOKEN,
-        token_uri="https://oauth2.googleapis.com/token", # nosec S106
+        token_uri=GMAIL_OAUTH_TOKEN_URI, # nosec S106
         client_id=get_settings.GMAIL_OAUTH_CLIENT_ID,
         client_secret=get_settings.GMAIL_OAUTH_CLIENT_SECRET,
     )

@@ -34,3 +34,6 @@ env_files = [".env.test"]
 [tool.coverage.run]
 source = ["backend"]
 omit = ["backend/tests/*", "backend/db/migrations/*"]
+
+[tool.bandit]
+exclude_dirs = ["tests", "backend/tests"]

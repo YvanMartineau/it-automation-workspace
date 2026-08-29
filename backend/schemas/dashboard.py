@@ -19,14 +19,14 @@ AuditActivityType = Literal["update", "create", "delete", "alert", "report"]
 
 
 class DashboardStats(BaseModel):
-    totalAssets: int
-    totalAssetsChange: int
+    totalAssets: int  # noqa: N815
+    totalAssetsChange: int  # noqa: N815
     online: int
-    onlinePercentage: float
+    onlinePercentage: float  # noqa: N815
     offline: int
-    offlineChange: int
-    healthAlerts: int
-    criticalAlerts: int
+    offlineChange: int  # noqa: N815
+    healthAlerts: int  # noqa: N815
+    criticalAlerts: int  # noqa: N815
 
 
 class HealthTrendPoint(BaseModel):
@@ -61,9 +61,8 @@ class AuditActivityItem(BaseModel):
 
 class DashboardSnapshot(BaseModel):
     stats: DashboardStats
-    healthTrend: list[HealthTrendPoint]
-    osDistribution: list[OSDistributionItem]
-    onboardingVolume: list[OnboardingVolumePoint]
-    auditActivity: list[AuditActivityItem]
-    generatedAt: datetime
-
+    healthTrend: list[HealthTrendPoint]  # noqa: N815
+    osDistribution: list[OSDistributionItem]  # noqa: N815
+    onboardingVolume: list[OnboardingVolumePoint]  # noqa: N815
+    auditActivity: list[AuditActivityItem]  # noqa: N815
+    generatedAt: datetime  # noqa: N815

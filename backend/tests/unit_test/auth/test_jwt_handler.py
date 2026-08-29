@@ -107,15 +107,14 @@ class TestDecodeToken:
 
     def test_decode_refresh_token(self, refresh_token):
         payload = decode_token(refresh_token, expected_type="refresh")
-        assert payload.token_type == "refresh"
+        assert payload.token_type == "refresh"  # noqa: S105
 
     def test_wrong_token_type_raises_invalid(self, access_token):
         with pytest.raises(TokenInvalidError):
             decode_token(access_token, expected_type="refresh")
 
     def test_expired_token_raises_expired(self, user):
-        expired_token = create_access_token(user)
-        # Manually craft an expired token using jose for control
+        # No need for the unused variable – we craft the expired token directly
         now = datetime.now(UTC)
         payload = {
             "sub": str(user.id),
@@ -190,7 +189,7 @@ class TestGetCurrentUser:
 
         fake_db = AsyncMock()
         with pytest.raises(HTTPException) as exc:
-            await get_current_user(token="invalid", db=fake_db)
+            await get_current_user(token="invalid", db=fake_db)  # noqa: S106
         assert exc.value.status_code == 401
 
     @pytest.mark.asyncio
