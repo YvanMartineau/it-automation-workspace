@@ -16,18 +16,27 @@ by the time either is called, upsert() has already run once.
 from datetime import datetime
 from uuid import UUID
 
+from core.exceptions import ConflictError
+from models.onboarded_user import (
+    OnboardedUser,
+    OnboardedUserStatus,
+    OnboardJobStatus,
+    ProvisioningSource,
+)
 from sqlalchemy import select
+from sqlalchemy.exc import IntegrityError
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from models.onboarded_user import OnboardedUser, OnboardedUserStatus, OnboardJobStatus, ProvisioningSource
 from services.provisioning.base import ProvisionedUser
-
-from sqlalchemy.exc import IntegrityError
-from core.exceptions import ConflictError
 
 
 async def upsert_onboarding_record(
-    db: AsyncSession, provisioned: ProvisionedUser, *, job_id: str, requested_by: str, job_status: OnboardJobStatus,
+    db: AsyncSession,
+    provisioned: ProvisionedUser,
+    *,
+    job_id: str,
+    requested_by: str,
+    job_status: OnboardJobStatus,
 ) -> OnboardedUser:
     result = await db.execute(select(OnboardedUser).where(OnboardedUser.id == provisioned.user_id))
     record = result.scalar_one_or_none()
@@ -53,7 +62,10 @@ async def upsert_onboarding_record(
 
 
 async def update_onboarding_job_status(
-    db: AsyncSession, job_id: str, job_status: OnboardJobStatus, error_message: str | None = None,
+    db: AsyncSession,
+    job_id: str,
+    job_status: OnboardJobStatus,
+    error_message: str | None = None,
 ) -> None:
     result = await db.execute(select(OnboardedUser).where(OnboardedUser.job_id == job_id))
     record = result.scalar_one_or_none()
@@ -75,14 +87,29 @@ async def mark_offboarded(db: AsyncSession, user_id: UUID, offboarded_at: dateti
 
 
 async def create_pending_onboarding_record(
-    db: AsyncSession, *, user_id: UUID, job_id: str, requested_by: str,
-    first_name: str, last_name: str, email: str, department: str, job_title: str,
+    db: AsyncSession,
+    *,
+    user_id: UUID,
+    job_id: str,
+    requested_by: str,
+    first_name: str,
+    last_name: str,
+    email: str,
+    department: str,
+    job_title: str,
     provisioning_source: ProvisioningSource,
 ) -> OnboardedUser:
     record = OnboardedUser(
-        id=user_id, job_id=job_id, requested_by=requested_by, job_status=OnboardJobStatus.PENDING,
-        first_name=first_name, last_name=last_name, email=email, department=department,
-        job_title=job_title, provisioning_source=provisioning_source,
+        id=user_id,
+        job_id=job_id,
+        requested_by=requested_by,
+        job_status=OnboardJobStatus.PENDING,
+        first_name=first_name,
+        last_name=last_name,
+        email=email,
+        department=department,
+        job_title=job_title,
+        provisioning_source=provisioning_source,
     )
     db.add(record)
     try:

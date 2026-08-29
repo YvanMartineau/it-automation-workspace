@@ -1,13 +1,13 @@
 """SQLAlchemy Device model — discovered/managed network hosts."""
+
 import enum
 import uuid
 
+from db.engine import Base
 from sqlalchemy import DateTime, Enum, Float, String, func
 from sqlalchemy.dialects.postgresql import JSONB
 from sqlalchemy.dialects.postgresql import UUID as PG_UUID
 from sqlalchemy.orm import Mapped, mapped_column
-
-from db.engine import Base
 
 
 class DeviceStatus(str, enum.Enum):

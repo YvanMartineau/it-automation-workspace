@@ -12,7 +12,7 @@ with multiple workers, this needs to move to Redis or similar.
 import asyncio
 import uuid
 from dataclasses import dataclass, field
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 from typing import Any
 
 
@@ -21,7 +21,7 @@ class Job:
     job_id: str
     status: str
     data: dict[str, Any] = field(default_factory=dict)
-    updated_at: datetime = field(default_factory=lambda: datetime.now(timezone.utc))
+    updated_at: datetime = field(default_factory=lambda: datetime.now(UTC))
     queue: asyncio.Queue = field(default_factory=asyncio.Queue)
 
 
@@ -43,7 +43,9 @@ async def update_job_status(job_id: str, status: str, data: dict[str, Any] | Non
     if job is None:
         return
     job.status = status
-    job.updated_at = datetime.now(timezone.utc)
+    job.updated_at = datetime.now(UTC)
     if data:
         job.data.update(data)  # merge, never replace — see note below on temporary_password
-    await job.queue.put({"status": status, "data": job.data, "updated_at": job.updated_at.isoformat()})
+    await job.queue.put(
+        {"status": status, "data": job.data, "updated_at": job.updated_at.isoformat()}
+    )

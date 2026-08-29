@@ -8,28 +8,27 @@ POST /onboard/jobs/{job_id}/status — n8n's callback, shared-secret guarded.
 
 import json
 from typing import Literal
-from uuid import UUID
+from uuid import UUID, uuid4
 
-from fastapi import APIRouter, BackgroundTasks, Depends, Header, HTTPException, status
-from pydantic import BaseModel
-from sqlalchemy import select
-from sqlalchemy.ext.asyncio import AsyncSession
-from sse_starlette.sse import EventSourceResponse
-from uuid import uuid4
 from core.exceptions import NotFoundError
 from core.job_store import create_job, get_job, update_job_status
 from db.engine import get_db
+from fastapi import APIRouter, BackgroundTasks, Depends, Header, HTTPException, status
+from middleware.audit_middleware import write_audit_log
 from models.onboarded_user import OnboardedUser, OnboardJobStatus
 from models.user import User
+from pydantic import BaseModel
 from schemas.onboard import OffboardResponse, OnboardedUserListItem, OnboardRequest
-from security.jwt_handler import get_admin_user, get_current_user
-from middleware.audit_middleware import write_audit_log
+from security.jwt_handler import get_admin_user
 from services.n8n_client import trigger_offboarding_workflow
 from services.onboarding_pipeline import resume_onboarding_pipeline, run_onboarding_pipeline
 from services.onboarding_record_service import mark_offboarded, update_onboarding_job_status
 from services.provisioning.base import UserProvisioningService
 from services.provisioning.factory import get_provisioning_service
 from settings import get_settings
+from sqlalchemy import select
+from sqlalchemy.ext.asyncio import AsyncSession
+from sse_starlette.sse import EventSourceResponse
 
 router = APIRouter(prefix="/onboard", tags=["onboarding"])
 settings = get_settings()
@@ -40,16 +39,32 @@ class OnboardJobStarted(BaseModel):
     status: str
 
 
-@router.post("", status_code=status.HTTP_202_ACCEPTED, response_model=OnboardJobStarted, summary="Start onboarding a new hire")
-async def onboard_user(body: OnboardRequest, background_tasks: BackgroundTasks, current_user: User = Depends(get_admin_user)) -> OnboardJobStarted:
+@router.post(
+    "",
+    status_code=status.HTTP_202_ACCEPTED,
+    response_model=OnboardJobStarted,
+    summary="Start onboarding a new hire",
+)
+async def onboard_user(
+    body: OnboardRequest,
+    background_tasks: BackgroundTasks,
+    current_user: User = Depends(get_admin_user),
+) -> OnboardJobStarted:
     job = create_job(initial_status="PENDING")
     user_id = uuid4()
     background_tasks.add_task(
-        run_onboarding_pipeline, job.job_id, user_id=user_id,
-        actor_email=current_user.email, first_name=body.first_name, last_name=body.last_name,
-        email=body.email, department=body.department, job_title=body.job_title,
+        run_onboarding_pipeline,
+        job.job_id,
+        user_id=user_id,
+        actor_email=current_user.email,
+        first_name=body.first_name,
+        last_name=body.last_name,
+        email=body.email,
+        department=body.department,
+        job_title=body.job_title,
     )
     return OnboardJobStarted(job_id=job.job_id, status=job.status)
+
 
 @router.get("/jobs/{job_id}/stream", summary="Stream onboarding progress")
 async def stream_onboarding_progress(job_id: str, current_user: User = Depends(get_admin_user)):
@@ -73,7 +88,11 @@ class JobStatusCallback(BaseModel):
     error: str | None = None
 
 
-@router.post("/jobs/{job_id}/status", status_code=status.HTTP_204_NO_CONTENT, summary="n8n status callback (internal)")
+@router.post(
+    "/jobs/{job_id}/status",
+    status_code=status.HTTP_204_NO_CONTENT,
+    summary="n8n status callback (internal)",
+)
 async def report_job_status(
     job_id: str,
     body: JobStatusCallback,
@@ -95,7 +114,9 @@ async def report_job_status(
         # needed there.
 
     await update_job_status(job_id, body.status, {"error": body.error} if body.error else None)
-    await update_onboarding_job_status(db, job_id, OnboardJobStatus(body.status), error_message=body.error)
+    await update_onboarding_job_status(
+        db, job_id, OnboardJobStatus(body.status), error_message=body.error
+    )
     await db.commit()
 
 
@@ -129,7 +150,10 @@ async def offboard_user(
         action="user.offboard",
         target_type="onboarded_user",
         target_id=str(user_id),
-        payload={"department": deactivated.department, "provisioning_source": deactivated.provisioning_source},
+        payload={
+            "department": deactivated.department,
+            "provisioning_source": deactivated.provisioning_source,
+        },
     )
     await db.commit()
 
@@ -173,7 +197,12 @@ async def list_onboarded_users(
     return list(result.scalars().all())
 
 
-@router.post("/jobs/{job_id}/retry", status_code=status.HTTP_202_ACCEPTED, response_model=OnboardJobStarted, summary="Retry a failed onboarding job")
+@router.post(
+    "/jobs/{job_id}/retry",
+    status_code=status.HTTP_202_ACCEPTED,
+    response_model=OnboardJobStarted,
+    summary="Retry a failed onboarding job",
+)
 async def retry_onboarding(
     job_id: str,
     background_tasks: BackgroundTasks,
@@ -185,19 +214,37 @@ async def retry_onboarding(
     if record is None:
         raise HTTPException(status_code=404, detail="Unknown job_id")
     if record.job_status != OnboardJobStatus.FAILED:
-        raise HTTPException(status_code=409, detail=f"Only FAILED jobs can be retried (current: {record.job_status.value})")
+        raise HTTPException(
+            status_code=409,
+            detail=f"Only FAILED jobs can be retried (current: {record.job_status.value})",
+        )
 
     new_job = create_job(initial_status="PENDING")
-    record.job_id, record.job_status, record.error_message = new_job.job_id, OnboardJobStatus.PENDING, None
+    record.job_id, record.job_status, record.error_message = (
+        new_job.job_id,
+        OnboardJobStatus.PENDING,
+        None,
+    )
     await db.commit()
 
     if record.external_id is None:
         background_tasks.add_task(
-            run_onboarding_pipeline, new_job.job_id, user_id=record.id, actor_email=current_user.email,
-            first_name=record.first_name, last_name=record.last_name, email=record.email,
-            department=record.department, job_title=record.job_title,
+            run_onboarding_pipeline,
+            new_job.job_id,
+            user_id=record.id,
+            actor_email=current_user.email,
+            first_name=record.first_name,
+            last_name=record.last_name,
+            email=record.email,
+            department=record.department,
+            job_title=record.job_title,
         )
     else:
-        background_tasks.add_task(resume_onboarding_pipeline, new_job.job_id, user_id=record.id, actor_email=current_user.email)
+        background_tasks.add_task(
+            resume_onboarding_pipeline,
+            new_job.job_id,
+            user_id=record.id,
+            actor_email=current_user.email,
+        )
 
     return OnboardJobStarted(job_id=new_job.job_id, status=new_job.status)

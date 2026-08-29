@@ -22,11 +22,10 @@ create that trigger for you (CW-12). See the migration note below.
 
 import uuid
 
+from db.engine import Base  # adjust this import if Base lives elsewhere, e.g. db/base.py
 from sqlalchemy import DateTime, String, func
 from sqlalchemy.dialects.postgresql import JSONB
 from sqlalchemy.orm import Mapped, mapped_column
-
-from db.engine import Base  # adjust this import if Base lives elsewhere, e.g. db/base.py
 
 
 class AuditLog(Base):

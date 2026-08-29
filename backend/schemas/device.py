@@ -1,8 +1,10 @@
 """Pydantic v2 schemas for Device endpoints."""
+
 import uuid
 from datetime import datetime
-from pydantic import BaseModel, ConfigDict, Field
+
 from models.device import DeviceStatus
+from pydantic import BaseModel, ConfigDict, Field
 
 
 class DeviceCreate(BaseModel):
@@ -17,6 +19,7 @@ class DeviceCreate(BaseModel):
 
 class DeviceUpdate(BaseModel):
     """All fields optional — PATCH semantics."""
+
     hostname: str | None = None
     mac_address: str | None = Field(default=None, max_length=17)
     status: DeviceStatus | None = None
@@ -43,12 +46,14 @@ class DeviceRead(BaseModel):
     created_at: datetime
     updated_at: datetime | None
 
+
 class AssetStatsRead(BaseModel):
     total: int
     online: int
     offline: int
     healthAlerts: int
-    
+
+
 class PaginationMeta(BaseModel):
     """
     Deliberately camelCase field NAMES (not aliases) — unlike DeviceRead
@@ -58,6 +63,7 @@ class PaginationMeta(BaseModel):
     matching its expected shape 1:1 avoids an alias layer for something
     that will never come from codegen anyway.
     """
+
     page: int
     pageSize: int
     totalPages: int

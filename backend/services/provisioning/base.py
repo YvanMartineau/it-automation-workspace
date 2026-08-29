@@ -9,8 +9,9 @@ provider is a settings.IDENTITY_PROVIDER flip, not a rewrite.
 
 from abc import ABC, abstractmethod
 from dataclasses import dataclass
-from uuid import UUID
 from datetime import datetime
+from uuid import UUID
+
 
 @dataclass(frozen=True)
 class ProvisionedUser:
@@ -32,7 +33,16 @@ class ProvisionedUser:
 
 class UserProvisioningService(ABC):
     @abstractmethod
-    async def create_user(self, *, user_id: UUID, first_name: str, last_name: str, email: str, department: str, job_title: str) -> ProvisionedUser:
+    async def create_user(
+        self,
+        *,
+        user_id: UUID,
+        first_name: str,
+        last_name: str,
+        email: str,
+        department: str,
+        job_title: str,
+    ) -> ProvisionedUser:
         """Raises ConflictError on duplicate email."""
 
     @abstractmethod

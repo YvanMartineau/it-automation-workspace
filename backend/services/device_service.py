@@ -9,15 +9,16 @@ appropriate HTTPException.
 """
 
 import uuid
+from dataclasses import dataclass
 
+from middleware.audit_middleware import write_audit_log
+from models.device import Device, DeviceStatus
+from models.device_health_history import DeviceHealthHistory
+from schemas.device import DeviceCreate, DeviceUpdate
 from sqlalchemy import func, or_, select
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.ext.asyncio import AsyncSession
-from dataclasses import dataclass
-from models.device_health_history import DeviceHealthHistory
-from middleware.audit_middleware import write_audit_log
-from models.device import Device, DeviceStatus
-from schemas.device import DeviceCreate, DeviceUpdate
+
 
 @dataclass
 class DeviceCounts:
@@ -206,7 +207,10 @@ async def get_health_alert_counts(db: AsyncSession) -> tuple[int, int]:
             DeviceHealthHistory.device_id,
             DeviceHealthHistory.health_score,
             func.row_number()
-            .over(partition_by=DeviceHealthHistory.device_id, order_by=DeviceHealthHistory.recorded_at.desc())
+            .over(
+                partition_by=DeviceHealthHistory.device_id,
+                order_by=DeviceHealthHistory.recorded_at.desc(),
+            )
             .label("rn"),
         )
     ).subquery()

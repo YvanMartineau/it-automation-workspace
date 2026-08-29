@@ -1,8 +1,5 @@
 import asyncio
-from datetime import datetime, timedelta, timezone
-
-from sqlalchemy import case, func, or_, select
-from sqlalchemy.ext.asyncio import AsyncSession
+from datetime import UTC, datetime, timedelta
 
 from models.audit_log import AuditLog
 from models.device import Device, DeviceStatus
@@ -18,6 +15,8 @@ from schemas.dashboard import (
     OnboardingVolumePoint,
     OSDistributionItem,
 )
+from sqlalchemy import case, func, or_, select
+from sqlalchemy.ext.asyncio import AsyncSession
 
 # ---------------------------------------------------------------------------
 # In-memory cache (module-level). Replace with Redis before running more
@@ -81,8 +80,10 @@ def _target_for(log: AuditLog) -> tuple[str, str]:
     """
     payload = log.payload or {}
     if log.target_type == "device":
-        name = payload.get("hostname") or payload.get("ip_address") or (
-            log.target_id[:8] if log.target_id else "unknown"
+        name = (
+            payload.get("hostname")
+            or payload.get("ip_address")
+            or (log.target_id[:8] if log.target_id else "unknown")
         )
         return name, f"Asset {name}"
     if log.target_type == "onboarded_user":
@@ -139,12 +140,15 @@ class DashboardService:
 
     async def get_stats(self) -> DashboardStats:
         from services.device_service import get_device_counts  # or move import to top of file
+
         counts = await get_device_counts(self.db)
         return DashboardStats(
             totalAssets=counts.total,
             totalAssetsChange=0,
             online=counts.online,
-            onlinePercentage=round((counts.online / counts.total * 100), 1) if counts.total else 0.0,
+            onlinePercentage=round((counts.online / counts.total * 100), 1)
+            if counts.total
+            else 0.0,
             offline=counts.offline,
             offlineChange=0,
             healthAlerts=counts.health_alerts,
@@ -201,8 +205,14 @@ class DashboardService:
         points: list[HealthTrendPoint] = []
         for row in rows:
             score = float(row.avg_score)
-            status: HealthStatus = "healthy" if score >= 85 else "warning" if score >= 70 else "critical"
-            points.append(HealthTrendPoint(date=row.day.strftime("%d %b"), score=round(score, 1), status=status))
+            status: HealthStatus = (
+                "healthy" if score >= 85 else "warning" if score >= 70 else "critical"
+            )
+            points.append(
+                HealthTrendPoint(
+                    date=row.day.strftime("%d %b"), score=round(score, 1), status=status
+                )
+            )
         return points
 
     async def get_os_distribution(self) -> list[OSDistributionItem]:
@@ -244,7 +254,7 @@ class DashboardService:
 
     async def get_onboarding_volume(self, weeks: int = 4) -> list[OnboardingVolumePoint]:
         """Weekly completed/in-progress/failed counts from onboarded_user.job_status."""
-        since = datetime.now(timezone.utc) - timedelta(weeks=weeks)
+        since = datetime.now(UTC) - timedelta(weeks=weeks)
         week_bucket = func.date_trunc("week", OnboardedUser.created_at).label("week_start")
 
         stmt = (
@@ -305,7 +315,7 @@ class DashboardService:
             osDistribution=await self.get_os_distribution(),
             onboardingVolume=await self.get_onboarding_volume(),
             auditActivity=await self.get_recent_audit(),
-            generatedAt=datetime.now(timezone.utc),
+            generatedAt=datetime.now(UTC),
         )
 
     async def get_snapshot_cached(self) -> DashboardSnapshot:
@@ -319,9 +329,13 @@ class DashboardService:
         """
         global _dashboard_cache, _cache_ttl
         async with _cache_lock:
-            if _dashboard_cache is not None and _cache_ttl is not None and datetime.now(timezone.utc) < _cache_ttl:
+            if (
+                _dashboard_cache is not None
+                and _cache_ttl is not None
+                and datetime.now(UTC) < _cache_ttl
+            ):
                 return _dashboard_cache
             snapshot = await self.get_snapshot()
             _dashboard_cache = snapshot
-            _cache_ttl = datetime.now(timezone.utc) + timedelta(seconds=30)
+            _cache_ttl = datetime.now(UTC) + timedelta(seconds=30)
             return snapshot

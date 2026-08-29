@@ -56,11 +56,14 @@ jobs:
       - name: Install dependencies
         run: pip install --upgrade pip && pip install -r backend/requirements.txt
 
-      - name: Ruff lint
-        run: ruff check backend/
+      - name: Ruff format
+        run: ruff format backend/
 
-      - name: Ruff format check
-        run: ruff format backend/ --check
+      - name: Ruff lint with auto-fix
+        run: ruff check backend/ --fix
+
+      - name: Ruff lint check (fail if unfixed issues remain)
+        run: ruff check backend/
 
 
       - name: Wait for PostgreSQL

@@ -18,10 +18,8 @@ global handler converts any unhandled SQLAlchemyError to a 503. Catching
 it again here would just duplicate that mapping in two places.
 """
 
-from fastapi import APIRouter, Depends, HTTPException, Request, Response, status
-from sqlalchemy.ext.asyncio import AsyncSession
-
 from db.engine import get_db
+from fastapi import APIRouter, Depends, HTTPException, Request, Response, status
 from schemas.auth import LoginRequest, TokenResponse
 from security.rate_limiter import limiter
 from services.auth_service import (
@@ -33,6 +31,7 @@ from services.auth_service import (
     rotate_access_token,
 )
 from settings import get_settings
+from sqlalchemy.ext.asyncio import AsyncSession
 
 settings = get_settings()
 router = APIRouter()
@@ -115,7 +114,9 @@ async def login(
     return TokenResponse(access_token=access_token)
 
 
-@router.post("/refresh", response_model=TokenResponse, summary="Exchange refresh cookie for new access token")
+@router.post(
+    "/refresh", response_model=TokenResponse, summary="Exchange refresh cookie for new access token"
+)
 @limiter.limit("30/minute")
 async def refresh(
     request: Request,
@@ -155,7 +156,9 @@ async def refresh(
     return TokenResponse(access_token=access_token)
 
 
-@router.post("/logout", status_code=status.HTTP_204_NO_CONTENT, summary="Clear refresh token cookie")
+@router.post(
+    "/logout", status_code=status.HTTP_204_NO_CONTENT, summary="Clear refresh token cookie"
+)
 @limiter.limit("60/minute")
 async def logout(
     request: Request,

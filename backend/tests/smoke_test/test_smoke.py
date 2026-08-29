@@ -1,7 +1,8 @@
-#backend/tests/smoke_test/test_smoke.py
+# backend/tests/smoke_test/test_smoke.py
 import pytest
-from httpx import AsyncClient, ASGITransport
+from httpx import ASGITransport, AsyncClient
 from main import app
+
 
 # SHOULD PASS
 @pytest.mark.asyncio
@@ -18,13 +19,15 @@ async def test_health_check():
 @pytest.mark.asyncio
 async def test_protected_endpoint_unauthorized():
     """Verify protected routes block unauthenticated requests with 401."""
-    async with AsyncClient(transport=ASGITransport(app=app), base_url="http://test", follow_redirects=False) as ac:
+    async with AsyncClient(
+        transport=ASGITransport(app=app), base_url="http://test", follow_redirects=False
+    ) as ac:
         # Try with trailing slash if your route uses one (e.g., /devices/)
         response = await ac.get("/devices/")
     assert response.status_code == 401
 
 
-#SHOULD PASS
+# SHOULD PASS
 @pytest.mark.asyncio
 async def test_refresh_token_missing():
     """Verify refresh route returns 401 when the cookie is absent."""
@@ -33,19 +36,18 @@ async def test_refresh_token_missing():
     assert response.status_code == 401
 
 
-#SHOULD PASS
+# SHOULD PASS
 @pytest.mark.asyncio
 async def test_login_invalid_credentials():
     """Verify login fails cleanly with invalid credentials."""
     # Assign the fake paswrd to a variable to bypass the secret scanner regex
     bad_paswrd = "wronged" + "paswrd"
-    
+
     async with AsyncClient(transport=ASGITransport(app=app), base_url="http://test") as ac:
         response = await ac.post(
-            "/auth/login",
-            json={"email": "nonexistent@example.com", "password": bad_paswrd}
+            "/auth/login", json={"email": "nonexistent@example.com", "password": bad_paswrd}
         )
-    
+
     assert response.status_code == 401
     data = response.json()
     message = data.get("message") or data.get("detail") or str(data)

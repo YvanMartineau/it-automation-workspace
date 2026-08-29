@@ -1,8 +1,8 @@
 """Tests for services/password_policy.py."""
+
 import secrets
 
 import pytest
-
 from services.password_policy import (
     ALL_CHARS,
     DIGITS,

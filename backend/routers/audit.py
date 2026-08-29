@@ -14,14 +14,13 @@ other services. This router exists purely to read what's already there.
 
 from datetime import datetime
 
-from fastapi import APIRouter, Depends, Query
-from sqlalchemy.ext.asyncio import AsyncSession
-
 from db.engine import get_db
+from fastapi import APIRouter, Depends, Query
 from models.user import User
 from schemas.audit_log import AuditLogRead
 from security.jwt_handler import get_admin_user
 from services.audit_log_service import list_audit_logs as list_audit_logs_service
+from sqlalchemy.ext.asyncio import AsyncSession
 
 router = APIRouter()
 

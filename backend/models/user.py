@@ -1,12 +1,12 @@
 """SQLAlchemy User model — auth identity and role."""
+
 import enum
 import uuid
 
+from db.engine import Base
 from sqlalchemy import Boolean, DateTime, Enum, String, func
 from sqlalchemy.dialects.postgresql import UUID as PG_UUID
 from sqlalchemy.orm import Mapped, mapped_column
-
-from db.engine import Base
 
 
 class UserRole(str, enum.Enum):

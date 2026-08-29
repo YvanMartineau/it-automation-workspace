@@ -1,13 +1,11 @@
 import asyncio
 from logging.config import fileConfig
 
+from alembic import context
+from settings import get_settings
 from sqlalchemy import pool
 from sqlalchemy.engine import Connection
 from sqlalchemy.ext.asyncio import async_engine_from_config
-
-from alembic import context
-
-from settings import get_settings
 
 # this is the Alembic Config object, which provides
 # access to the values within the .ini file in use.
@@ -22,12 +20,7 @@ if config.config_file_name is not None:
 # for 'autogenerate' support
 # from myapp import mymodel
 from db.engine import Base
-from models.user import User
-from models.device import Device
-from models.audit_log import AuditLog
-from models.onboarded_user import OnboardedUser
-from models.report_log import ReportLog
-from models.device_health_history import DeviceHealthHistory
+
 # add each new model import here as you build more
 config.set_main_option("sqlalchemy.url", get_settings().DEV_DATABASE_URL)
 

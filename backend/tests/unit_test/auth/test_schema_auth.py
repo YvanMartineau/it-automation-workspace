@@ -1,15 +1,18 @@
-#backend/tests/unit_test/auth/test_schema_auth.py
+# backend/tests/unit_test/auth/test_schema_auth.py
 import pytest
 from pydantic import ValidationError
 from schemas.auth import LoginRequest, TokenResponse
+
 
 # helpers return the dummy values - so the line with password= is not
 # password="literal" anymore
 def _pwd() -> str:
     return "securepass"
 
+
 def _tok() -> str:
     return "token123"
+
 
 class TestLoginRequest:
     def test_valid_login(self):
@@ -31,6 +34,7 @@ class TestLoginRequest:
     def test_empty_password_is_accepted_at_schema_level(self):
         req = LoginRequest(email="user@example.com", password="")
         assert req.password == ""
+
 
 class TestTokenResponse:
     def test_default_token_type(self):

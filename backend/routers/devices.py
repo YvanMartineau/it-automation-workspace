@@ -15,13 +15,12 @@ persistence, and audit logging live in the service layer.
 import math
 import uuid
 
-from fastapi import APIRouter, Depends, HTTPException, Query, status
-from sqlalchemy.ext.asyncio import AsyncSession
-
 from db.engine import get_db
+from fastapi import APIRouter, Depends, HTTPException, Query, status
 from models.device import DeviceStatus
 from models.user import User
 from schemas.device import (
+    AssetStatsRead,
     DeviceCreate,
     DeviceRead,
     DeviceUpdate,
@@ -33,14 +32,13 @@ from services.device_service import (
     DeviceConflictError,
     DeviceNotFoundError,
     NoUpdateFieldsError,
+    get_device_counts,
+    list_devices_paginated,
 )
 from services.device_service import create_device as create_device_service
 from services.device_service import delete_device as delete_device_service
-from services.device_service import list_devices_paginated
 from services.device_service import update_device as update_device_service
-
-from services.device_service import get_device_counts
-from schemas.device import AssetStatsRead 
+from sqlalchemy.ext.asyncio import AsyncSession
 
 router = APIRouter()
 
@@ -67,7 +65,9 @@ async def list_devices(
 
     return PaginatedDeviceList(
         data=[DeviceRead.model_validate(d) for d in devices],
-        meta=PaginationMeta(page=page, pageSize=page_size, totalPages=total_pages, totalItems=total_items),
+        meta=PaginationMeta(
+            page=page, pageSize=page_size, totalPages=total_pages, totalItems=total_items
+        ),
     )
 
 
@@ -124,7 +124,9 @@ async def update_device(
     return DeviceRead.model_validate(device)
 
 
-@router.delete("/{device_id}", status_code=status.HTTP_204_NO_CONTENT, summary="Delete a device (admin only)")
+@router.delete(
+    "/{device_id}", status_code=status.HTTP_204_NO_CONTENT, summary="Delete a device (admin only)"
+)
 async def delete_device(
     device_id: uuid.UUID,
     db: AsyncSession = Depends(get_db),
@@ -152,5 +154,8 @@ async def get_device_stats(
 ) -> AssetStatsRead:
     counts = await get_device_counts(db)
     return AssetStatsRead(
-        total=counts.total, online=counts.online, offline=counts.offline, healthAlerts=counts.health_alerts
+        total=counts.total,
+        online=counts.online,
+        offline=counts.offline,
+        healthAlerts=counts.health_alerts,
     )

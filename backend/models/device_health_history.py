@@ -13,11 +13,10 @@ the type here doesn't touch any other file's contract.
 import uuid
 from datetime import datetime
 
-from sqlalchemy import DateTime, ForeignKey, Index, Float
+from db.engine import Base
+from sqlalchemy import DateTime, Float, ForeignKey, Index
 from sqlalchemy.dialects.postgresql import UUID as PG_UUID
 from sqlalchemy.orm import Mapped, mapped_column
-
-from db.engine import Base
 
 
 class DeviceHealthHistory(Base):
@@ -28,8 +27,8 @@ class DeviceHealthHistory(Base):
         PG_UUID(as_uuid=True), ForeignKey("devices.id", ondelete="CASCADE"), nullable=False
     )
     health_score: Mapped[float] = mapped_column(Float, nullable=False)
-    recorded_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=datetime.utcnow, nullable=False)
-
-    __table_args__ = (
-        Index("ix_health_history_device_date", "device_id", "recorded_at"),
+    recorded_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), default=datetime.utcnow, nullable=False
     )
+
+    __table_args__ = (Index("ix_health_history_device_date", "device_id", "recorded_at"),)

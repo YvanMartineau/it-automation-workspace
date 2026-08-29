@@ -15,21 +15,20 @@ a caller. get_current_user() and get_admin_user() are FastAPI dependencies
 this file that raises HTTPException.
 """
 
-from datetime import datetime, timedelta, timezone
+from datetime import UTC, datetime, timedelta
 from enum import Enum
 from typing import Any
 from uuid import UUID
 
+from db.engine import get_db
 from fastapi import Depends, HTTPException, status
 from fastapi.security import OAuth2PasswordBearer
 from jose import ExpiredSignatureError, JWTError, jwt
+from models.user import User
+from settings import get_settings
 from sqlalchemy import select
 from sqlalchemy.exc import SQLAlchemyError
 from sqlalchemy.ext.asyncio import AsyncSession
-
-from db.engine import get_db
-from models.user import User
-from settings import get_settings
 
 settings = get_settings()
 
@@ -52,10 +51,11 @@ class TokenInvalidError(TokenError):
 
 class TokenPayload:
     """Decoded, validated claims — internal carrier, not a Pydantic model."""
+
     def __init__(self, sub: str, token_type: str, exp: int):
-        self.sub = sub          # subject (user ID as str(UUID))
+        self.sub = sub  # subject (user ID as str(UUID))
         self.token_type = token_type  # "access" or "refresh"
-        self.exp = exp          # expiration as Unix timestamp (int)
+        self.exp = exp  # expiration as Unix timestamp (int)
 
 
 def _create_token(
@@ -64,7 +64,7 @@ def _create_token(
     token_type: str,
     extra_claims: dict[str, Any] | None = None,
 ) -> str:
-    now = datetime.now(timezone.utc)
+    now = datetime.now(UTC)
     payload: dict[str, Any] = {
         "sub": subject,
         "type": token_type,
@@ -214,7 +214,9 @@ async def get_admin_user(current_user: User = Depends(get_current_user)) -> User
     Dependency enforcing admin-only access.
     Handles both Enum-based and string-based role representations.
     """
-    role_value = current_user.role.value if isinstance(current_user.role, Enum) else str(current_user.role)
+    role_value = (
+        current_user.role.value if isinstance(current_user.role, Enum) else str(current_user.role)
+    )
 
     if role_value.lower() != "admin":
         raise HTTPException(

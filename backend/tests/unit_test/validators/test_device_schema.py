@@ -1,20 +1,30 @@
 # backend/tests/unit_test/validators/test_device_schema.py
-from pydantic import BaseModel, Field, AliasChoices
-import pytest
-from pydantic import ValidationError
+from datetime import UTC
 
-from schemas.device import DeviceCreate, DeviceUpdate, DeviceRead, PaginatedDeviceList, PaginationMeta
+import pytest
 from models.device import DeviceStatus  # this import requires models/device.py
+from pydantic import AliasChoices, BaseModel, Field, ValidationError
+from schemas.device import (
+    DeviceCreate,
+    DeviceRead,
+    DeviceUpdate,
+    PaginationMeta,
+)
 
 
 class PaginationMeta(BaseModel):
     page: int
-    page_size: int = Field(alias='pageSize', validation_alias=AliasChoices('page_size', 'pageSize'))
-    total_pages: int = Field(alias='totalPages', validation_alias=AliasChoices('total_pages', 'totalPages'))
-    total_items: int = Field(alias='totalItems', validation_alias=AliasChoices('total_items', 'totalItems'))
-    
+    page_size: int = Field(alias="pageSize", validation_alias=AliasChoices("page_size", "pageSize"))
+    total_pages: int = Field(
+        alias="totalPages", validation_alias=AliasChoices("total_pages", "totalPages")
+    )
+    total_items: int = Field(
+        alias="totalItems", validation_alias=AliasChoices("total_items", "totalItems")
+    )
+
     class Config:
         populate_by_name = True
+
 
 class TestDeviceCreate:
     def test_valid_device_create(self):
@@ -56,8 +66,8 @@ class TestDeviceUpdate:
 
 class TestDeviceRead:
     def test_from_orm_object(self):
+        from datetime import datetime
         from uuid import uuid4
-        from datetime import datetime, timezone
 
         obj = {
             "id": uuid4(),
@@ -70,15 +80,16 @@ class TestDeviceRead:
             "os_info": "Ubuntu 22.04",
             "latency_ms": 12.3,
             "open_ports": [{"port": 22, "service": "ssh"}],
-            "last_seen": datetime.now(timezone.utc),
-            "created_at": datetime.now(timezone.utc),
+            "last_seen": datetime.now(UTC),
+            "created_at": datetime.now(UTC),
             "updated_at": None,
         }
         read = DeviceRead(**obj)
         assert read.ip_address == "192.168.1.10"
 
-#To fix in V2
-#class TestPaginatedDeviceList:
+
+# To fix in V2
+# class TestPaginatedDeviceList:
 #    def test_camel_case_meta(self):
 #       from uuid import uuid4
 #

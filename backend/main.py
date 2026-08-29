@@ -3,18 +3,20 @@ Project 1 — IT Automation Platform
 FastAPI application factory with lifespan, CORS, rate limiting,
 and router registration. All business logic lives in routers/.
 """
-from contextlib import asynccontextmanager
-from fastapi import FastAPI
-from fastapi.middleware.cors import CORSMiddleware
+
 import logging
-from slowapi import _rate_limit_exceeded_handler
-from slowapi.errors import RateLimitExceeded
+from contextlib import asynccontextmanager
+
 from core.exceptions import setup_exception_handlers
 from core.logging_config import setup_logging
-from settings import get_settings
+from fastapi import FastAPI
+from fastapi.middleware.cors import CORSMiddleware
+from routers import audit, auth, dashboard, devices, onboard, reports, scan
 from security.rate_limiter import limiter
 from services.scheduler import start_scheduler, stop_scheduler
-from routers import auth, devices, audit, scan, onboard, reports, dashboard
+from settings import get_settings
+from slowapi import _rate_limit_exceeded_handler
+from slowapi.errors import RateLimitExceeded
 
 settings = get_settings()
 
@@ -23,12 +25,13 @@ logger = logging.getLogger(__name__)
 # List of emails to receive the weekly report
 WEEKLY_RECIPIENTS = "martineaubadou9@gmail.com"
 
-@asynccontextmanager
 
+@asynccontextmanager
 async def lifespan(app: FastAPI):
     start_scheduler()
     yield
     stop_scheduler()
+
 
 def create_app() -> FastAPI:
     setup_logging()
@@ -60,10 +63,12 @@ def create_app() -> FastAPI:
     app.include_router(reports.router)
     app.include_router(dashboard.router)
     app.include_router(audit.router, prefix="/audit-logs", tags=["audit"])
-    
+
     @app.get("/health", tags=["health"])
     async def health_check():
         return {"status": "ok", "env": settings.APP_ENV}
+
     return app
+
 
 app = create_app()

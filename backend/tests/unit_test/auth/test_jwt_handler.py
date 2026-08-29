@@ -10,23 +10,23 @@ Once available, run as usual:
 
     pytest backend/tests/unit_test/auth/test_jwt_handler.py
 """
+
 import uuid
-from datetime import datetime, timedelta, timezone
+from datetime import UTC, datetime, timedelta
 from enum import Enum
 
 import pytest
 from fastapi import HTTPException
 from jose import jwt
-
 from security.jwt_handler import (
+    TokenExpiredError,
+    TokenInvalidError,
+    TokenPayload,
     create_access_token,
     create_refresh_token,
     decode_token,
-    get_current_user,
     get_admin_user,
-    TokenPayload,
-    TokenExpiredError,
-    TokenInvalidError,
+    get_current_user,
 )
 from settings import get_settings
 
@@ -116,7 +116,7 @@ class TestDecodeToken:
     def test_expired_token_raises_expired(self, user):
         expired_token = create_access_token(user)
         # Manually craft an expired token using jose for control
-        now = datetime.now(timezone.utc)
+        now = datetime.now(UTC)
         payload = {
             "sub": str(user.id),
             "type": "access",
@@ -136,7 +136,7 @@ class TestDecodeToken:
     def test_missing_sub_raises_invalid(self):
         payload = {
             "type": "access",
-            "exp": datetime.now(timezone.utc) + timedelta(minutes=5),
+            "exp": datetime.now(UTC) + timedelta(minutes=5),
         }
         token = jwt.encode(payload, get_settings().JWT_SECRET_KEY, algorithm="HS256")
         with pytest.raises(TokenInvalidError):
@@ -145,7 +145,7 @@ class TestDecodeToken:
     def test_missing_type_raises_invalid(self):
         payload = {
             "sub": "some-uuid",
-            "exp": datetime.now(timezone.utc) + timedelta(minutes=5),
+            "exp": datetime.now(UTC) + timedelta(minutes=5),
         }
         token = jwt.encode(payload, get_settings().JWT_SECRET_KEY, algorithm="HS256")
         with pytest.raises(TokenInvalidError):
@@ -171,7 +171,7 @@ class TestGetCurrentUser:
 
         fake_db = AsyncMock()
         # Create expired token using pure jwt
-        now = datetime.now(timezone.utc)
+        now = datetime.now(UTC)
         payload = {
             "sub": str(user.id),
             "type": "access",
@@ -201,7 +201,7 @@ class TestGetCurrentUser:
         payload = {
             "sub": "not-a-uuid",
             "type": "access",
-            "exp": datetime.now(timezone.utc) + timedelta(minutes=5),
+            "exp": datetime.now(UTC) + timedelta(minutes=5),
         }
         token = jwt.encode(payload, get_settings().JWT_SECRET_KEY, algorithm="HS256")
         with pytest.raises(HTTPException) as exc:
@@ -211,7 +211,6 @@ class TestGetCurrentUser:
     @pytest.mark.asyncio
     async def test_user_not_found_returns_401(self, user):
         from unittest.mock import AsyncMock
-        from sqlalchemy import select
 
         fake_db = AsyncMock()
         # Simulate db.execute returning result with scalar_one_or_none -> None

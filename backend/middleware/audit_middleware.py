@@ -1,4 +1,5 @@
 """Audit log FastAPI dependency — writes AuditLog on every mutating operation."""
+
 # audit_middleware.py
 """
 Audit log writer.
@@ -16,9 +17,8 @@ failures to be non-fatal to the primary operation.
 """
 import logging
 
-from sqlalchemy.ext.asyncio import AsyncSession
-
 from models.audit_log import AuditLog
+from sqlalchemy.ext.asyncio import AsyncSession
 
 logger = logging.getLogger("sysops.audit")
 

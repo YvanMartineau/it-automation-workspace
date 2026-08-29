@@ -1,10 +1,12 @@
 import asyncio
 import io
 import logging
-from datetime import datetime, timezone
-from typing import Any, Dict
 import os
+from datetime import UTC, datetime
+from typing import Any
+
 import matplotlib
+
 matplotlib.use("Agg")  # Non-GUI backend for server environments
 import matplotlib.pyplot as plt
 from jinja2 import Environment, FileSystemLoader, select_autoescape
@@ -41,7 +43,7 @@ def _generate_fleet_status_donut_svg(online_count: int, offline_count: int) -> s
     )
     plt.setp(autotexts, size=8, weight="bold")
     ax.set_title("Fleet Status Distribution", fontsize=9, fontweight="bold", pad=10)
-    
+
     plt.tight_layout()
     buffer = io.StringIO()
     plt.savefig(buffer, format="svg", transparent=True)
@@ -60,7 +62,7 @@ def _generate_cpu_load_bar_svg(top_cpu_devices: list) -> str:
 
     fig, ax = plt.subplots(figsize=(4.5, 2.5))
     y_pos = range(len(hostnames))
-    
+
     bars = ax.barh(y_pos, cpu_loads, align="center", color="#2563eb", height=0.5)
     ax.set_yticks(y_pos)
     ax.set_yticklabels(hostnames, fontsize=8)
@@ -68,23 +70,30 @@ def _generate_cpu_load_bar_svg(top_cpu_devices: list) -> str:
     ax.set_xlabel("CPU Load (%)", fontsize=8)
     ax.set_xlim(0, 100)
     ax.set_title("Top Compute Consumers", fontsize=9, fontweight="bold")
-    
+
     for bar in bars:
         width = bar.get_width()
-        ax.text(width + 1, bar.get_y() + bar.get_height()/2, f"{width:.1f}%", 
-                va="center", ha="left", fontsize=7, color="#4b5563")
+        ax.text(
+            width + 1,
+            bar.get_y() + bar.get_height() / 2,
+            f"{width:.1f}%",
+            va="center",
+            ha="left",
+            fontsize=7,
+            color="#4b5563",
+        )
 
     ax.spines["top"].set_visible(False)
     ax.spines["right"].set_visible(False)
     plt.tight_layout()
-    
+
     buffer = io.StringIO()
     plt.savefig(buffer, format="svg", transparent=True)
     plt.close(fig)
     return buffer.getvalue()
 
 
-async def generate_report_pdf(context: Dict[str, Any]) -> bytes:
+async def generate_report_pdf(context: dict[str, Any]) -> bytes:
     """
     Asynchronously computes vector SVG charts and renders the Jinja2 HTML template to PDF via WeasyPrint.
     """
@@ -92,19 +101,17 @@ async def generate_report_pdf(context: Dict[str, Any]) -> bytes:
 
     # 1. Render SVG Charts in ThreadPoolExecutor to prevent event loop blocking
     donut_chart_svg = await loop.run_in_executor(
-        None, 
-        _generate_fleet_status_donut_svg, 
-        context.get("online_devices", 0), 
-        len(context.get("offline_devices", []))
-    )
-    
-    bar_chart_svg = await loop.run_in_executor(
-        None, 
-        _generate_cpu_load_bar_svg, 
-        context.get("top_cpu_devices", [])
+        None,
+        _generate_fleet_status_donut_svg,
+        context.get("online_devices", 0),
+        len(context.get("offline_devices", [])),
     )
 
-    now = datetime.now(timezone.utc)
+    bar_chart_svg = await loop.run_in_executor(
+        None, _generate_cpu_load_bar_svg, context.get("top_cpu_devices", [])
+    )
+
+    now = datetime.now(UTC)
     total = context.get("total_devices", 0)
     online = context.get("online_devices", 0)
     availability_pct = round((online / total) * 100, 2) if total > 0 else 0.0
@@ -123,8 +130,6 @@ async def generate_report_pdf(context: Dict[str, Any]) -> bytes:
     html_content = template.render(**enriched_context)
 
     # 4. Render WeasyPrint PDF
-    pdf_bytes = await loop.run_in_executor(
-        None, lambda: HTML(string=html_content).write_pdf()
-    )
+    pdf_bytes = await loop.run_in_executor(None, lambda: HTML(string=html_content).write_pdf())
 
     return pdf_bytes

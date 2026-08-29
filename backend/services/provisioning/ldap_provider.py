@@ -18,9 +18,10 @@ run_in_executor — same pattern as services/scanner.py.
 
 import asyncio
 import logging
-from datetime import datetime, timezone
-from uuid import UUID, uuid4
+from datetime import UTC, datetime
+from uuid import UUID
 
+from core.exceptions import ConflictError, ExternalServiceError, NotFoundError
 from ldap3 import (
     HASHED_SALTED_SHA,
     MODIFY_ADD,
@@ -32,8 +33,6 @@ from ldap3 import (
 )
 from ldap3.core.exceptions import LDAPException
 from ldap3.utils.hashed import hashed
-
-from core.exceptions import ConflictError, ExternalServiceError, NotFoundError
 from services.provisioning.base import ProvisionedUser, UserProvisioningService
 from settings import get_settings
 
@@ -57,7 +56,9 @@ class LdapProvisioningService(UserProvisioningService):
 
     # ---- sync implementations, always called via run_in_executor ----
 
-    def _create_user_sync(self, user_id: UUID, first_name, last_name, email, department, job_title) -> ProvisionedUser:
+    def _create_user_sync(
+        self, user_id: UUID, first_name, last_name, email, department, job_title
+    ) -> ProvisionedUser:
         uid = email.split("@")[0]
         user_dn = f"uid={uid},{settings.LDAP_USERS_OU}"
 
@@ -73,7 +74,7 @@ class LdapProvisioningService(UserProvisioningService):
                     "mail": email,
                     "title": job_title,
                     "departmentNumber": department,
-                    "employeeNumber": str(user_id),   # was internal_id
+                    "employeeNumber": str(user_id),  # was internal_id
                     "description": "active",
                 },
             )
@@ -85,7 +86,7 @@ class LdapProvisioningService(UserProvisioningService):
             self._ensure_group_membership_sync(conn, department, user_dn)
 
             return ProvisionedUser(
-                user_id=user_id,   # was internal_id
+                user_id=user_id,  # was internal_id
                 external_id=user_dn,
                 first_name=first_name,
                 last_name=last_name,
@@ -98,26 +99,39 @@ class LdapProvisioningService(UserProvisioningService):
         finally:
             conn.unbind()
 
-    def _ensure_group_membership_sync(self, conn: Connection, department: str, user_dn: str) -> None:
+    def _ensure_group_membership_sync(
+        self, conn: Connection, department: str, user_dn: str
+    ) -> None:
         group_dn = f"cn={department},{settings.LDAP_GROUPS_OU}"
         # Search FROM the (guaranteed-to-exist) groups OU, not from group_dn itself —
         # using a group DN that doesn't exist yet as the search base raises noSuchObject
         # rather than just returning zero results.
-        conn.search(settings.LDAP_GROUPS_OU, f"(cn={department})", search_scope=SUBTREE, attributes=["member"])
+        conn.search(
+            settings.LDAP_GROUPS_OU,
+            f"(cn={department})",
+            search_scope=SUBTREE,
+            attributes=["member"],
+        )
         if conn.entries:
             conn.modify(group_dn, {"member": [(MODIFY_ADD, [user_dn])]})
         else:
-            created = conn.add(group_dn, object_class=["groupOfNames"], attributes={"member": [user_dn]})
+            created = conn.add(
+                group_dn, object_class=["groupOfNames"], attributes={"member": [user_dn]}
+            )
             if not created:
                 raise ExternalServiceError(f"Could not create group '{group_dn}': {conn.result}")
 
     def _set_password_sync(self, user_dn: str, password: str) -> None:
         conn = self._connect()
         try:
-            pw_hash = hashed(HASHED_SALTED_SHA, password)  # salted-hashed client-side, never sent in cleartext
+            pw_hash = hashed(
+                HASHED_SALTED_SHA, password
+            )  # salted-hashed client-side, never sent in cleartext
             modified = conn.modify(user_dn, {"userPassword": [(MODIFY_REPLACE, [pw_hash])]})
             if not modified:
-                raise ExternalServiceError(f"LDAP password set failed for '{user_dn}': {conn.result}")
+                raise ExternalServiceError(
+                    f"LDAP password set failed for '{user_dn}': {conn.result}"
+                )
         finally:
             conn.unbind()
 
@@ -137,14 +151,28 @@ class LdapProvisioningService(UserProvisioningService):
             current_description = str(entry.description) if "description" in entry else ""
 
             if current_description.startswith("offboarded:"):
-                offboarded_at = datetime.fromisoformat(current_description.split("offboarded:", 1)[1])
+                offboarded_at = datetime.fromisoformat(
+                    current_description.split("offboarded:", 1)[1]
+                )
             else:
-                conn.search(settings.LDAP_GROUPS_OU, f"(member={user_dn})", search_scope=SUBTREE, attributes=["member"])
+                conn.search(
+                    settings.LDAP_GROUPS_OU,
+                    f"(member={user_dn})",
+                    search_scope=SUBTREE,
+                    attributes=["member"],
+                )
                 for grp in conn.entries:
                     conn.modify(grp.entry_dn, {"member": [(MODIFY_DELETE, [user_dn])]})
 
-                offboarded_at = datetime.now(timezone.utc)
-                conn.modify(user_dn, {"description": [(MODIFY_REPLACE, [f"offboarded:{offboarded_at.isoformat()}"])]})
+                offboarded_at = datetime.now(UTC)
+                conn.modify(
+                    user_dn,
+                    {
+                        "description": [
+                            (MODIFY_REPLACE, [f"offboarded:{offboarded_at.isoformat()}"])
+                        ]
+                    },
+                )
 
             return ProvisionedUser(
                 user_id=user_id,
@@ -160,17 +188,25 @@ class LdapProvisioningService(UserProvisioningService):
             )
         finally:
             conn.unbind()
-            
+
     # ---- async interface ----
-    async def create_user(self, *, user_id: UUID, first_name, last_name, email, department, job_title) -> ProvisionedUser:
+    async def create_user(
+        self, *, user_id: UUID, first_name, last_name, email, department, job_title
+    ) -> ProvisionedUser:
         loop = asyncio.get_running_loop()
         try:
             return await loop.run_in_executor(
-                None, self._create_user_sync, user_id, first_name, last_name, email, department, job_title
+                None,
+                self._create_user_sync,
+                user_id,
+                first_name,
+                last_name,
+                email,
+                department,
+                job_title,
             )
         except LDAPException as err:
             raise ExternalServiceError(f"LDAP operation failed: {err}") from err
-
 
     async def set_password(self, user: ProvisionedUser, password: str) -> None:
         loop = asyncio.get_running_loop()

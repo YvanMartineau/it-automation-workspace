@@ -13,10 +13,9 @@ uses it, not bolted onto the writer.
 
 from datetime import datetime
 
+from models.audit_log import AuditLog
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
-
-from models.audit_log import AuditLog
 
 
 async def list_audit_logs(

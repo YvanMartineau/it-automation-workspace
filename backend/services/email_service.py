@@ -3,10 +3,10 @@ import logging
 from email.mime.application import MIMEApplication
 from email.mime.multipart import MIMEMultipart
 from email.mime.text import MIMEText
-import aiosmtplib
-from google.oauth2.credentials import Credentials
-from google.auth.transport.requests import Request
 
+import aiosmtplib
+from google.auth.transport.requests import Request
+from google.oauth2.credentials import Credentials
 from settings import get_settings
 
 logger = logging.getLogger(__name__)
@@ -23,7 +23,7 @@ def _get_gmail_oauth2_access_token() -> str:
         client_id=get_settings.GMAIL_OAUTH_CLIENT_ID,
         client_secret=get_settings.GMAIL_OAUTH_CLIENT_SECRET,
     )
-    
+
     # Synchronously refresh the OAuth2 token
     creds.refresh(Request())
     if not creds.token:
@@ -57,9 +57,7 @@ async def send_email_with_attachment(
 
     # Attach PDF Document
     pdf_attachment = MIMEApplication(attachment_bytes, _subtype="pdf")
-    pdf_attachment.add_header(
-        "Content-Disposition", "attachment", filename=filename
-    )
+    pdf_attachment.add_header("Content-Disposition", "attachment", filename=filename)
     message.attach(pdf_attachment)
 
     # 3. Send Email via Async SMTP

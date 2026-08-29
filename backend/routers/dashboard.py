@@ -1,13 +1,13 @@
-from fastapi import APIRouter, Depends
-from sqlalchemy.ext.asyncio import AsyncSession
-
 from db.engine import get_db
-from services.dashboard import DashboardService
+from fastapi import APIRouter, Depends
+from models.user import User
 from schemas.dashboard import DashboardSnapshot
 from security.jwt_handler import get_current_user
-from models.user import User
+from services.dashboard import DashboardService
+from sqlalchemy.ext.asyncio import AsyncSession
 
 router = APIRouter(prefix="/dashboard", tags=["dashboard"])
+
 
 @router.get("", response_model=DashboardSnapshot)
 async def get_dashboard(
@@ -16,7 +16,7 @@ async def get_dashboard(
 ):
     """
     Returns a complete dashboard snapshot.
-    
+
     This is a single aggregated endpoint to minimize HTTP round-trips
     and respect the Aiven max_connections=20 constraint.
     """

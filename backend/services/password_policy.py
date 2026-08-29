@@ -5,6 +5,7 @@ NEVER use `random` here: it is not cryptographically secure and is
 predictable given enough output, which is disqualifying for credential
 generation in any security-conscious review.
 """
+
 import secrets
 import string
 

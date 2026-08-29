@@ -1,16 +1,17 @@
 import logging
 import uuid
-from apscheduler.schedulers.asyncio import AsyncIOScheduler
-from apscheduler.triggers.interval import IntervalTrigger
-from apscheduler.triggers.cron import CronTrigger
-from pydantic import ValidationError
 
+from apscheduler.schedulers.asyncio import AsyncIOScheduler
+from apscheduler.triggers.cron import CronTrigger
+from apscheduler.triggers.interval import IntervalTrigger
 from db.engine import AsyncSessionLocal
 from models.report_log import ReportType
+from pydantic import ValidationError
 from schemas.scan import ScanRequest
+from settings import get_settings
+
 from services import scanner
 from services.report_service import generate_and_send_report_task
-from settings import get_settings
 
 logger = logging.getLogger(__name__)
 
@@ -42,8 +43,12 @@ async def _run_weekly_report_job() -> None:
     """The weekly report job body APScheduler fires every Monday at 08:00 AM."""
     report_id = uuid.uuid4()
     recipient_email = settings.GMAIL_SENDER_EMAIL
-    logger.info("Starting scheduled weekly report generation report_id=%s recipient=%s", report_id, recipient_email)
-    
+    logger.info(
+        "Starting scheduled weekly report generation report_id=%s recipient=%s",
+        report_id,
+        recipient_email,
+    )
+
     try:
         await generate_and_send_report_task(
             report_id=report_id,
@@ -66,7 +71,9 @@ def start_scheduler() -> None:
     try:
         validated_subnet = ScanRequest(subnet=settings.ALLOWED_SCAN_SUBNET).subnet
     except ValidationError as err:
-        logger.error("ALLOWED_SCAN_SUBNET (%r) failed validation: %s", settings.ALLOWED_SCAN_SUBNET, err)
+        logger.error(
+            "ALLOWED_SCAN_SUBNET (%r) failed validation: %s", settings.ALLOWED_SCAN_SUBNET, err
+        )
         raise
 
     _scheduler = AsyncIOScheduler()

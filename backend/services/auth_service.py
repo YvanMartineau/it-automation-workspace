@@ -15,13 +15,12 @@ import logging
 from uuid import UUID
 
 from fastapi.concurrency import run_in_threadpool
-from sqlalchemy import select
-from sqlalchemy.ext.asyncio import AsyncSession
-
 from middleware.audit_middleware import write_audit_log
 from models.user import User
 from security.jwt_handler import TokenError, create_access_token, create_refresh_token, decode_token
 from security.password_hashing import verify_password
+from sqlalchemy import select
+from sqlalchemy.ext.asyncio import AsyncSession
 
 logger = logging.getLogger("sysops.security")
 

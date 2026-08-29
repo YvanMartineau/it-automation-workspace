@@ -1,4 +1,4 @@
-#models/onboarded_user.py
+# models/onboarded_user.py
 """
 New-hire identity record.
 
@@ -18,11 +18,12 @@ import enum
 import uuid
 from datetime import datetime
 
-from sqlalchemy import DateTime, Enum as SAEnum, String, func
-from sqlalchemy.dialects.postgresql import JSONB, UUID as PGUUID  # noqa: F401 (JSONB unused here, kept for parity)
-from sqlalchemy.orm import Mapped, mapped_column
-
 from db.engine import Base
+from sqlalchemy import DateTime, String, func
+from sqlalchemy import Enum as SAEnum
+from sqlalchemy.dialects.postgresql import JSONB  # noqa: F401 (JSONB unused here, kept for parity)
+from sqlalchemy.dialects.postgresql import UUID as PGUUID
+from sqlalchemy.orm import Mapped, mapped_column
 
 
 class OnboardedUserStatus(str, enum.Enum):
@@ -35,6 +36,7 @@ class ProvisioningSource(str, enum.Enum):
     LDAP = "ldap"
     ENTRA_ID = "entra_id"
 
+
 class OnboardJobStatus(str, enum.Enum):
     PENDING = "PENDING"
     AD_CREATING = "AD_CREATING"
@@ -43,10 +45,13 @@ class OnboardJobStatus(str, enum.Enum):
     COMPLETED = "COMPLETED"
     FAILED = "FAILED"
 
+
 class OnboardedUser(Base):
     __tablename__ = "onboarded_user"
 
-    id: Mapped[uuid.UUID] = mapped_column(PGUUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
+    id: Mapped[uuid.UUID] = mapped_column(
+        PGUUID(as_uuid=True), primary_key=True, default=uuid.uuid4
+    )
     first_name: Mapped[str] = mapped_column(String(100), nullable=False)
     last_name: Mapped[str] = mapped_column(String(100), nullable=False)
     email: Mapped[str] = mapped_column(String(255), nullable=False, unique=True, index=True)
@@ -71,11 +76,15 @@ class OnboardedUser(Base):
     # reaches COMPLETED or FAILED.
     job_id: Mapped[str | None] = mapped_column(String(36), nullable=True, index=True)
     job_status: Mapped[OnboardJobStatus] = mapped_column(
-        SAEnum(OnboardJobStatus, name="onboard_job_status"), nullable=False, default=OnboardJobStatus.PENDING
+        SAEnum(OnboardJobStatus, name="onboard_job_status"),
+        nullable=False,
+        default=OnboardJobStatus.PENDING,
     )
     requested_by: Mapped[str | None] = mapped_column(String(255), nullable=True)
     error_message: Mapped[str | None] = mapped_column(String(1000), nullable=True)
 
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())
-    updated_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), onupdate=func.now())
+    updated_at: Mapped[datetime | None] = mapped_column(
+        DateTime(timezone=True), onupdate=func.now()
+    )
     offboarded_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)

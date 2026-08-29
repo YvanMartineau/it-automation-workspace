@@ -2,7 +2,6 @@
 import pytest
 from pydantic import ValidationError
 from pydantic_settings import SettingsConfigDict
-
 from settings import Settings, get_settings
 
 
@@ -15,8 +14,8 @@ def disable_env_file(monkeypatch):
         env_file=None,
         env_file_encoding=None,
         # Preserve other config options from original
-        extra=original_config.get('extra', 'ignore'),
-        arbitrary_types_allowed=original_config.get('arbitrary_types_allowed', True),
+        extra=original_config.get("extra", "ignore"),
+        arbitrary_types_allowed=original_config.get("arbitrary_types_allowed", True),
     )
     yield
     # Restore original config after test

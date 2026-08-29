@@ -8,21 +8,18 @@ Usage:
     python -m backend.seed --confirm-prod  # required if DATABASE_URL is not localhost
 """
 
+import asyncio
 import logging
 import os
-import asyncio
-import sys
 import time
 import uuid
-from datetime import datetime, timedelta, timezone
-
-from ldap3 import SUBTREE, Connection, Server
-from passlib.context import CryptContext
-from sqlalchemy import select
 
 from db.engine import AsyncSessionLocal, engine
+from ldap3 import Connection, Server
 from models.user import User
+from passlib.context import CryptContext
 from settings import get_settings
+from sqlalchemy import select
 
 pwd_context = CryptContext(schemes=["bcrypt"], deprecated="auto")
 

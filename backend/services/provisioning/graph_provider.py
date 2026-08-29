@@ -13,8 +13,12 @@ from services.provisioning.base import ProvisionedUser, UserProvisioningService
 
 
 class GraphProvisioningService(UserProvisioningService):
-    async def create_user(self, *, user_id: UUID, first_name, last_name, email, department, job_title) -> ProvisionedUser:
-        raise NotImplementedError("GraphProvisioningService is not implemented yet. Set IDENTITY_PROVIDER=local.")
+    async def create_user(
+        self, *, user_id: UUID, first_name, last_name, email, department, job_title
+    ) -> ProvisionedUser:
+        raise NotImplementedError(
+            "GraphProvisioningService is not implemented yet. Set IDENTITY_PROVIDER=local."
+        )
 
     async def set_password(self, user: ProvisionedUser, password: str) -> None:
         raise NotImplementedError("GraphProvisioningService is not implemented yet.")

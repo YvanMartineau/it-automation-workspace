@@ -3,13 +3,16 @@ Centralised settings via pydantic-settings.
 App will NOT start if any required env var is missing.
 All secrets come from environment — never hardcoded.
 """
-from pathlib import Path
+
 from functools import lru_cache
+from pathlib import Path
 from typing import Literal
+
 from pydantic import model_validator
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
 ENV_FILE_PATH = Path(__file__).resolve().parent.parent / ".env"
+
 
 class Settings(BaseSettings):
     model_config = SettingsConfigDict(env_file=ENV_FILE_PATH, extra="ignore")
@@ -49,10 +52,10 @@ class Settings(BaseSettings):
         return self
 
     # Microsoft Graph
-    #GRAPH_TENANT_ID: str
-    #GRAPH_CLIENT_ID: str
-    #GRAPH_CLIENT_SECRET: str
-    #GRAPH_DEFAULT_GROUP_ID: str = ""
+    # GRAPH_TENANT_ID: str
+    # GRAPH_CLIENT_ID: str
+    # GRAPH_CLIENT_SECRET: str
+    # GRAPH_DEFAULT_GROUP_ID: str = ""
 
     # n8n — optional by design. ADR-007: n8n is fire-and-continue and non-critical-path
     # at request time; leaving this unset must not crash startup or block onboarding.
@@ -66,11 +69,13 @@ class Settings(BaseSettings):
     GMAIL_OAUTH_CLIENT_SECRET: str
     GMAIL_OAUTH_REFRESH_TOKEN: str
     GMAIL_SENDER_ADDRESS: str
-    #ADMIN_ALERT_EMAIL: str #Not Yet Implemented
+    # ADMIN_ALERT_EMAIL: str #Not Yet Implemented
 
     # App
     FRONTEND_URL: str = "http://localhost:5173"
-    ALLOWED_SCAN_SUBNET: str = "192.168.179.0/24" #For Local(Discovers my WIFI devices) and #192.168.1.0/24 for Prod
+    ALLOWED_SCAN_SUBNET: str = (
+        "192.168.179.0/24"  # For Local(Discovers my WIFI devices) and #192.168.1.0/24 for Prod
+    )
     APP_ENV: str = "development"
     LOG_LEVEL: str = "INFO"
 

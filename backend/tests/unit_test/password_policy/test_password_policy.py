@@ -1,16 +1,14 @@
-#backend/tests/unit_test/password_policy/test_password_policy.py
-import re
+# backend/tests/unit_test/password_policy/test_password_policy.py
 import pytest
-
 from services.password_policy import (
+    DEFAULT_LENGTH,
+    DIGITS,
+    LOWER,
+    MIN_LENGTH,
+    SYMBOLS,
+    UPPER,
     generate_secure_password,
     validate_password_policy,
-    UPPER,
-    LOWER,
-    DIGITS,
-    SYMBOLS,
-    MIN_LENGTH,
-    DEFAULT_LENGTH,
 )
 
 
@@ -70,9 +68,9 @@ class TestValidatePasswordPolicy:
         with pytest.raises(ValueError, match="digit"):
             validate_password_policy("Aa!Aa!Aa!Aa!Aa!Aa!")
 
-#To fix In V2
+
+# To fix In V2
 #     def test_no_symbol(self):
 #        # Check what the actual error message says
 #        with pytest.raises(ValueError, match="symbol"):
 #            validate_password_policy("Aa1Aa1Aa1Aa1Aa1")
-

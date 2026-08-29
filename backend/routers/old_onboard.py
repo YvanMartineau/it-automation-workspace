@@ -4,21 +4,20 @@ POST /onboard — new hire onboarding. Currently provisions locally
 itself doesn't know or care which provider is active.
 """
 
-from fastapi import APIRouter, BackgroundTasks, Depends, HTTPException, status
-from sqlalchemy.ext.asyncio import AsyncSession
-
 from uuid import UUID
+
 from core.exceptions import ConflictError, NotFoundError
 from db.engine import get_db
-from models.user import User
-from schemas.onboard import OnboardRequest, OnboardResponse, OffboardResponse
-from security.jwt_handler import get_admin_user
+from fastapi import APIRouter, BackgroundTasks, Depends, HTTPException, status
 from middleware.audit_middleware import write_audit_log
-from services.n8n_client import trigger_onboarding_workflow
+from models.user import User
+from schemas.onboard import OffboardResponse, OnboardRequest, OnboardResponse
+from security.jwt_handler import get_admin_user
+from services.n8n_client import trigger_offboarding_workflow, trigger_onboarding_workflow
 from services.password_policy import generate_secure_password
 from services.provisioning.base import UserProvisioningService
 from services.provisioning.factory import get_provisioning_service
-from services.n8n_client import trigger_offboarding_workflow
+from sqlalchemy.ext.asyncio import AsyncSession
 
 router = APIRouter(prefix="/onboard", tags=["onboarding"])
 
@@ -138,7 +137,10 @@ async def offboard_user(
         action="user.offboard",
         target_type="onboarded_user",
         target_id=str(user_id),
-        payload={"department": deactivated.department, "provisioning_source": deactivated.provisioning_source},
+        payload={
+            "department": deactivated.department,
+            "provisioning_source": deactivated.provisioning_source,
+        },
     )
     await db.commit()
 

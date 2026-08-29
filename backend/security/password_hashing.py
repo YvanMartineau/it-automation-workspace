@@ -4,6 +4,7 @@ Separate from services/password_policy.py, which handles generation
 of temporary passwords for onboarding — this file only hashes/verifies
 credentials for login.
 """
+
 from passlib.context import CryptContext
 
 pwd_context = CryptContext(schemes=["bcrypt"], deprecated="auto")

@@ -14,17 +14,16 @@ import json
 import logging
 from uuid import UUID, uuid4
 
-from fastapi import APIRouter, BackgroundTasks, Depends, HTTPException, Request, status
-from sqlalchemy.ext.asyncio import AsyncSession
-from sse_starlette.sse import EventSourceResponse
-
 from db.engine import AsyncSessionLocal, get_db
+from fastapi import APIRouter, BackgroundTasks, Depends, HTTPException, Request, status
+from middleware.audit_middleware import write_audit_log
 from models.user import User
 from schemas.scan import ScanRequest, ScanStartResponse
-from security.jwt_handler import get_admin_user, get_current_user
+from security.jwt_handler import get_admin_user
 from security.rate_limiter import limiter
 from services import scanner
-from middleware.audit_middleware import write_audit_log
+from sqlalchemy.ext.asyncio import AsyncSession
+from sse_starlette.sse import EventSourceResponse
 
 logger = logging.getLogger(__name__)
 
@@ -114,7 +113,7 @@ async def stream_scan_progress(
 
             try:
                 event = await asyncio.wait_for(queue.get(), timeout=_SSE_HEARTBEAT_SECONDS)
-            except asyncio.TimeoutError:
+            except TimeoutError:
                 # A raw comment line (":keep-alive") — browsers' EventSource
                 # ignores it, but it keeps Nginx (proxy_read_timeout) and
                 # Cloudflare Tunnel from treating the connection as idle.

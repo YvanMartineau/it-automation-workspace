@@ -1,11 +1,12 @@
+from datetime import UTC
+
 import pytest
 from pydantic import ValidationError
-
 from schemas.onboard import (
-    OnboardRequest,
-    OnboardResponse,
     OffboardResponse,
     OnboardedUserListItem,
+    OnboardRequest,
+    OnboardResponse,
 )
 
 
@@ -139,13 +140,13 @@ class TestOnboardResponse:
 
 class TestOffboardResponse:
     def test_valid_response(self):
+        from datetime import datetime
         from uuid import uuid4
-        from datetime import datetime, timezone
 
         data = {
             "user_id": uuid4(),
             "status": "OFFBOARDED",
-            "offboarded_at": datetime.now(timezone.utc),
+            "offboarded_at": datetime.now(UTC),
         }
         resp = OffboardResponse(**data)
         assert resp.status == "OFFBOARDED"
@@ -153,8 +154,8 @@ class TestOffboardResponse:
 
 class TestOnboardedUserListItem:
     def test_validation_alias_maps_id_to_user_id(self):
+        from datetime import datetime
         from uuid import uuid4
-        from datetime import datetime, timezone
 
         obj = {
             "id": uuid4(),
@@ -170,7 +171,7 @@ class TestOnboardedUserListItem:
             "provisioning_source": "ldap",
             "requested_by": None,
             "error_message": None,
-            "created_at": datetime.now(timezone.utc),
+            "created_at": datetime.now(UTC),
             "offboarded_at": None,
         }
         item = OnboardedUserListItem(**obj)

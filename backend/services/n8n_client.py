@@ -1,4 +1,5 @@
 import logging
+
 import httpx
 from settings import get_settings
 
@@ -17,7 +18,12 @@ async def _trigger_webhook(webhook_url: str, payload: dict, label: str) -> bool:
         async with httpx.AsyncClient(timeout=settings.N8N_WEBHOOK_TIMEOUT_SECONDS) as client:
             response = await client.post(webhook_url, json=payload)
             if response.status_code != 200:
-                logger.error("%s webhook returned %s for keys=%s", label, response.status_code, list(payload.keys()))
+                logger.error(
+                    "%s webhook returned %s for keys=%s",
+                    label,
+                    response.status_code,
+                    list(payload.keys()),
+                )
                 return False
             return True
     except httpx.TimeoutException:

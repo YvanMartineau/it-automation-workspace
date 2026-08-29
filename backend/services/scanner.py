@@ -44,17 +44,18 @@ import socket
 import time
 from collections.abc import Awaitable, Callable
 from dataclasses import dataclass
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 from typing import Any, Literal
 from uuid import UUID
-from sqlalchemy import update
+
 import nmap
 import psutil
+from middleware.audit_middleware import write_audit_log
+from models.device import Device, DeviceStatus
+from models.device_health_history import DeviceHealthHistory
+from sqlalchemy import update
 from sqlalchemy.dialects.postgresql import insert as pg_insert
 from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker
-from models.device_health_history import DeviceHealthHistory
-from models.device import Device, DeviceStatus
-from middleware.audit_middleware import write_audit_log
 
 logger = logging.getLogger(__name__)
 
@@ -87,7 +88,7 @@ def create_job(job_id: UUID, subnet: str) -> None:
         "status": "running",
         "queue": asyncio.Queue(),
         "subnet": subnet,
-        "started_at": datetime.now(timezone.utc),
+        "started_at": datetime.now(UTC),
         "hosts_total": 0,
         "hosts_scanned": 0,
     }
@@ -100,6 +101,7 @@ def get_job(job_id: str) -> dict[str, Any] | None:
 # ---------------------------------------------------------------------------
 # nmap result parsing
 # ---------------------------------------------------------------------------
+
 
 def _parse_ping_result(nm: nmap.PortScanner, host: str) -> ScanResult:
     """Parse a completed `-sn` scan for one host."""
@@ -159,6 +161,7 @@ def _parse_os_and_ports(nm: nmap.PortScanner, host: str) -> tuple[str | None, li
 # Local-host enrichment
 # ---------------------------------------------------------------------------
 
+
 def _get_local_ip_addresses() -> set[str]:
     """All IPv4 addresses bound to this machine's own interfaces."""
     local_ips: set[str] = set()
@@ -199,6 +202,7 @@ def _enrich_local_host_sync(result: ScanResult) -> ScanResult:
 # ---------------------------------------------------------------------------
 # Scanning
 # ---------------------------------------------------------------------------
+
 
 async def async_scan_subnet(
     subnet: str,
@@ -267,6 +271,7 @@ async def async_scan_subnet(
 # Device upsert
 # ---------------------------------------------------------------------------
 
+
 async def _upsert_device(db: AsyncSession, result: ScanResult) -> UUID | None:
     """
     Online hosts: insert-or-update — a real, current asset.
@@ -275,7 +280,7 @@ async def _upsert_device(db: AsyncSession, result: ScanResult) -> UUID | None:
     device's id if a row was written, so run_scan() can attach a health
     score to it — None if a down host had no existing row to update.
     """
-    now = datetime.now(timezone.utc)
+    now = datetime.now(UTC)
 
     if result.status == "up":
         stmt = pg_insert(Device).values(
@@ -299,9 +304,13 @@ async def _upsert_device(db: AsyncSession, result: ScanResult) -> UUID | None:
                 "os_info": stmt.excluded.os_info,
                 "latency_ms": stmt.excluded.latency_ms,
                 "open_ports": stmt.excluded.open_ports,
-                "cpu_percent": stmt.excluded.cpu_percent if result.cpu_percent is not None else Device.cpu_percent,
+                "cpu_percent": stmt.excluded.cpu_percent
+                if result.cpu_percent is not None
+                else Device.cpu_percent,
                 "memory_percent": (
-                    stmt.excluded.memory_percent if result.memory_percent is not None else Device.memory_percent
+                    stmt.excluded.memory_percent
+                    if result.memory_percent is not None
+                    else Device.memory_percent
                 ),
                 "last_seen": now,
             },
@@ -319,9 +328,11 @@ async def _upsert_device(db: AsyncSession, result: ScanResult) -> UUID | None:
     row = (await db.execute(stmt)).one_or_none()
     return row.id if row else None
 
+
 # ---------------------------------------------------------------------------
 # Job orchestration
 # ---------------------------------------------------------------------------
+
 
 async def run_scan(
     job_id: UUID,
@@ -381,18 +392,28 @@ async def run_scan(
                 action="device.scan.complete",
                 target_type="scan_job",
                 target_id=job_id_str,
-                payload={"subnet": subnet, "total_hosts": len(results), "online": online, "offline": offline},
+                payload={
+                    "subnet": subnet,
+                    "total_hosts": len(results),
+                    "online": online,
+                    "offline": offline,
+                },
             )
 
         job["status"] = "complete"
         await queue.put(
-            {"event": "complete", "data": {"total_hosts": len(results), "online": online, "offline": offline}}
+            {
+                "event": "complete",
+                "data": {"total_hosts": len(results), "online": online, "offline": offline},
+            }
         )
 
     except Exception as exc:
         logger.exception("Scan job %s failed", job_id_str)
         job["status"] = "error"
-        await queue.put({"event": "error", "data": {"message": "Scan failed due to an internal error"}})
+        await queue.put(
+            {"event": "error", "data": {"message": "Scan failed due to an internal error"}}
+        )
 
         try:
             async with session_factory() as db:

@@ -1,5 +1,6 @@
-from uuid import UUID
 from datetime import datetime
+from uuid import UUID
+
 from pydantic import BaseModel, ConfigDict, EmailStr, Field
 
 
@@ -14,15 +15,14 @@ class OnboardRequest(BaseModel):
 class OnboardResponse(BaseModel):
     model_config = ConfigDict(from_attributes=True)
 
-    user_id: UUID                  # internal identity, stable across provider swaps
-    external_id: str | None        # populated once real Entra ID provisioning exists
+    user_id: UUID  # internal identity, stable across provider swaps
+    external_id: str | None  # populated once real Entra ID provisioning exists
     email: EmailStr
     department: str
     job_title: str
     status: str
     provisioning_source: str
-    temporary_password: str        # returned once only — never persisted, never logged
-
+    temporary_password: str  # returned once only — never persisted, never logged
 
 
 class OffboardResponse(BaseModel):
@@ -50,5 +50,6 @@ class OnboardedUserListItem(BaseModel):
     error_message: str | None
     created_at: datetime
     offboarded_at: datetime | None
+
 
 "serialization_alias (not alias) is deliberate — it only changes the outbound JSON key, leaving the from_attributes lookup against the ORM object's actual job_status attribute untouched. If workflow_status isn't actually the exact name your frontend expects, tell me the real one and it's a one-word change."

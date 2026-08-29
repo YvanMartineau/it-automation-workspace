@@ -1,11 +1,12 @@
 import uuid
 from datetime import datetime
 from enum import Enum
-from sqlalchemy import String, DateTime, Text, Enum as SQLEnum, func
-from sqlalchemy.dialects.postgresql import UUID, JSONB
-from sqlalchemy.orm import Mapped, mapped_column
 
 from db.engine import Base
+from sqlalchemy import DateTime, String, Text, func
+from sqlalchemy import Enum as SQLEnum
+from sqlalchemy.dialects.postgresql import UUID
+from sqlalchemy.orm import Mapped, mapped_column
 
 
 class ReportType(str, Enum):
@@ -22,9 +23,7 @@ class ReportStatus(str, Enum):
 class ReportLog(Base):
     __tablename__ = "report_log"
 
-    id: Mapped[uuid.UUID] = mapped_column(
-        UUID(as_uuid=True), primary_key=True, default=uuid.uuid4
-    )
+    id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
     report_name: Mapped[str] = mapped_column(String(100), nullable=False)
     report_type: Mapped[str] = mapped_column(String(100), nullable=False)
     triggered_by: Mapped[str] = mapped_column(String(255), nullable=False)

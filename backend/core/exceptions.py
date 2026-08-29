@@ -122,6 +122,7 @@ def setup_exception_handlers(app: FastAPI) -> None:
             },
         )
 
+
 """
 Domain-level exceptions raised by service functions. Deliberately NOT
 HTTPException subclasses — services shouldn't know about HTTP. Routers
