@@ -94,10 +94,6 @@ def _generate_cpu_load_bar_svg(top_cpu_devices: list) -> str:
 
 
 async def generate_report_pdf(context: dict[str, Any]) -> bytes:
-    """
-    Asynchronously computes vector SVG charts 
-    and renders the Jinja2 HTML template to PDF via WeasyPrint.
-    """
     loop = asyncio.get_running_loop()
 
     # 1. Render SVG Charts in ThreadPoolExecutor to prevent event loop blocking
