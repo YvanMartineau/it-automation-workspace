@@ -1,8 +1,3 @@
-# ============================================================
-#  GitHub Actions CI — Project 1 IT Automation Platform
-#  Triggers: push and PR to main and development
-#  Jobs: backend tests, frontend lint, secret scan
-# ============================================================
 name: CI
 
 on:
@@ -12,7 +7,7 @@ on:
     branches: [main, development]
 
 jobs:
-  # ── Secret scanning (runs first — fail fast) ───────────────
+  # ── Secret scanning ─────────────────────────────────────────
   secret-scan:
     name: Secret Scan
     runs-on: ubuntu-latest
@@ -20,12 +15,13 @@ jobs:
       - uses: actions/checkout@v4
         with:
           fetch-depth: 0
+
       - name: Scan for secrets with gitleaks
         uses: gitleaks/gitleaks-action@v2
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
 
-  # ── Backend tests ──────────────────────────────────────────
+  # ── Backend tests ───────────────────────────────────────────
   backend:
     name: Backend Tests (Python 3.12)
     runs-on: ubuntu-latest
@@ -44,6 +40,7 @@ jobs:
           --health-interval 10s
           --health-timeout 5s
           --health-retries 5
+
     steps:
       - uses: actions/checkout@v4
 
@@ -62,12 +59,12 @@ jobs:
       - name: Ruff lint with auto-fix
         run: ruff check backend/ --fix
 
-      - name: Ruff lint check (fail if unfixed issues remain)
+      - name: Ruff lint check
         run: ruff check backend/
 
       - name: Wait for PostgreSQL
         run: |
-          python -c "
+          python - << 'EOF'
           import socket, time
           for _ in range(30):
               try:
@@ -78,7 +75,7 @@ jobs:
                   time.sleep(1)
           else:
               raise TimeoutError('PostgreSQL failed to start in time')
-          "
+          EOF
 
       - name: Pytest with coverage
         run: |
@@ -106,40 +103,39 @@ jobs:
           name: coverage-report
           path: coverage.xml
 
-  # ── Frontend lint & type-check ─────────────────────────────
+  # ── Frontend lint & type-check ──────────────────────────────
   frontend:
-  name: Frontend Lint & Type-check
-  runs-on: ubuntu-latest
-  needs: secret-scan
-  steps:
-    - uses: actions/checkout@v4
+    name: Frontend Lint & Type-check
+    runs-on: ubuntu-latest
+    needs: secret-scan
 
-    - uses: actions/setup-node@v4
-      with:
-        node-version: "22"
-        cache: "npm"
-        cache-dependency-path: frontend/package-lock.json
+    steps:
+      - uses: actions/checkout@v4
 
-    - name: Install dependencies
-      run: npm ci
-      working-directory: frontend
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+          cache: "npm"
+          cache-dependency-path: frontend/package-lock.json
 
-    # Force GitHub to use your project's TypeScript version
-    - name: Pin TypeScript version
-      run: npm install typescript@5.9.3 --save-dev
-      working-directory: frontend
+      - name: Install dependencies
+        run: npm ci
+        working-directory: frontend
 
-    - name: Lint
-      run: npm run lint
-      working-directory: frontend
+      - name: Pin TypeScript version
+        run: npm install typescript@5.9.3 --save-dev
+        working-directory: frontend
 
-    # Use LOCAL TypeScript, not GitHub runner's global TS 6/7
-    - name: Type-check
-      run: ./node_modules/.bin/tsc --noEmit
-      working-directory: frontend
+      - name: Lint
+        run: npm run lint
+        working-directory: frontend
 
-    - name: Build verification
-      run: npm run build
-      working-directory: frontend
-      env:
-        VITE_API_URL: http://localhost:8000
+      - name: Type-check (local TS only)
+        run: ./node_modules/.bin/tsc --noEmit
+        working-directory: frontend
+
+      - name: Build verification
+        run: npm run build
+        working-directory: frontend
+        env:
+          VITE_API_URL: http://localhost:8000
