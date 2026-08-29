@@ -18,13 +18,11 @@
     "noUnusedLocals": true,
     "noUnusedParameters": true,
     "noFallthroughCasesInSwitch": true,
-    "ignoreDeprecations": "6.0",
     "baseUrl": ".",
-    "types": ["node", "vite/client"], //for e2e test
+    "types": ["node", "vite/client"],
     "paths": {
       "#/*": ["./src/*"]
     }
-    
   },
   "include": ["src", "src/vite-env.d.ts"]
 }
