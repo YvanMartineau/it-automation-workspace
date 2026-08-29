@@ -1,0 +1,18 @@
+# .gitleaks.toml
+title = "Gitleaks config — IT Automation Platform"
+
+[extend]
+useDefault = true
+
+[allowlist]
+description = """
+Known CI-only placeholder values. These exist purely to satisfy
+Pydantic Settings validation at import time (see backend/settings.py) —
+none of them are ever used to authenticate against a real service.
+Real secrets are never allowed here regardless of what this file contains.
+"""
+regexes = [
+  '''ci-test-secret-key-must-be-32-bytes-longx''',  # JWT_SECRET_KEY in ci.yml
+  '''ci-mock(\.[\w.-]+)?''',                          # GMAIL_OAUTH_* mock values
+  '''ci@mock\.com''',                                 # GMAIL_SENDER_ADDRESS mock value
+]
