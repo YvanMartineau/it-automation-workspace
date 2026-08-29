@@ -119,7 +119,7 @@ async def main():
 
     async with AsyncSessionLocal() as db:
         print("Seeding users...")
-        users = await _seed_users(db)
+        await _seed_users(db)
 
     elapsed = time.perf_counter() - start
     print(f"\nSeed complete in {elapsed:.2f}s.")

@@ -52,7 +52,7 @@ class LocalDBProvisioningService(UserProvisioningService):
         makes explicit that it currently goes nowhere.
         """
         logger.debug(
-            "set_password no-op for local provisioning (user_id=%s) — no directory account exists yet.",
+            "set_password for local provisioning (user_id=%s) — no account exists yet.",
             user.user_id,
         )
 

@@ -44,12 +44,14 @@ class OnboardedUserListItem(BaseModel):
     department: str
     job_title: str
     status: str
-    job_status: str = Field(serialization_alias="workflow_status")
+    job_status: str = Field(
+        serialization_alias="workflow_status"
+        # serialization_alias (not alias) is deliberate — it only changes
+        # the outbound JSON key, leaving the from_attributes lookup against
+        # the ORM object's actual job_status attribute untouched.
+    )
     provisioning_source: str
     requested_by: str | None
     error_message: str | None
     created_at: datetime
     offboarded_at: datetime | None
-
-
-"serialization_alias (not alias) is deliberate — it only changes the outbound JSON key, leaving the from_attributes lookup against the ORM object's actual job_status attribute untouched. If workflow_status isn't actually the exact name your frontend expects, tell me the real one and it's a one-word change."

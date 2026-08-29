@@ -95,7 +95,8 @@ def _generate_cpu_load_bar_svg(top_cpu_devices: list) -> str:
 
 async def generate_report_pdf(context: dict[str, Any]) -> bytes:
     """
-    Asynchronously computes vector SVG charts and renders the Jinja2 HTML template to PDF via WeasyPrint.
+    Asynchronously computes vector SVG charts 
+    and renders the Jinja2 HTML template to PDF via WeasyPrint.
     """
     loop = asyncio.get_running_loop()
 
@@ -116,7 +117,7 @@ async def generate_report_pdf(context: dict[str, Any]) -> bytes:
     online = context.get("online_devices", 0)
     availability_pct = round((online / total) * 100, 2) if total > 0 else 0.0
 
-    # 2. Enrich context while preserving all original metrics (like onboarded_users, start_date, etc.)
+    # 2. Enrich context while preserving original metrics (e.g. onboarded_users)
     enriched_context = {
         **context,
         "generated_at": now.strftime("%Y-%m-%d %H:%M:%S UTC"),

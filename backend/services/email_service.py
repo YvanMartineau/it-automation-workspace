@@ -19,7 +19,7 @@ def _get_gmail_oauth2_access_token() -> str:
     creds = Credentials(
         token=None,
         refresh_token=get_settings.GMAIL_OAUTH_REFRESH_TOKEN,
-        token_uri="https://oauth2.googleapis.com/token",
+        token_uri="https://oauth2.googleapis.com/token", # nosec S106
         client_id=get_settings.GMAIL_OAUTH_CLIENT_ID,
         client_secret=get_settings.GMAIL_OAUTH_CLIENT_SECRET,
     )

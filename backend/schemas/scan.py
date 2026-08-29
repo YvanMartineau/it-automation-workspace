@@ -78,8 +78,13 @@ class ScanStartResponse(BaseModel):
 
 
 class ScanProgressData(BaseModel):
-    """Shape of the SSE 'progress' event payload. Documented for OpenAPI; not used to validate the wire event directly, since sse-starlette streams are outside FastAPI's response_model validation path."""
+    """
+    Shape of the SSE 'progress' event payload.
 
+    Documented for OpenAPI; not used to validate the wire event directly,
+    since sse-starlette streams are outside FastAPI's response_model
+    validation path.
+    """
     model_config = ConfigDict(from_attributes=True)
 
     hosts_found: int

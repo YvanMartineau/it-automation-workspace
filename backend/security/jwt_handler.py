@@ -118,7 +118,7 @@ def create_refresh_token(user_id: UUID) -> str:
     return _create_token(
         subject=str(user_id),
         expires_delta=timedelta(days=settings.REFRESH_TOKEN_EXPIRE_DAYS),
-        token_type="refresh",
+        token_type="refresh", # noqa: S106
     )
 
 

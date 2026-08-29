@@ -101,7 +101,7 @@ def start_scheduler() -> None:
 
     _scheduler.start()
     logger.info(
-        "Scheduler started — discovery scan every %s minutes against %s | Weekly report Mondays @ 08:00",
+        "Scheduler started — discovery scan every %s minutes against %s | Weekly Mon 8:00",
         DISCOVERY_SCAN_INTERVAL_MINUTES,
         validated_subnet,
     )

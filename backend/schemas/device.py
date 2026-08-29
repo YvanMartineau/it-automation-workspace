@@ -51,7 +51,7 @@ class AssetStatsRead(BaseModel):
     total: int
     online: int
     offline: int
-    healthAlerts: int
+    healthAlerts: int  # noqa: N815
 
 
 class PaginationMeta(BaseModel):
@@ -65,9 +65,9 @@ class PaginationMeta(BaseModel):
     """
 
     page: int
-    pageSize: int
-    totalPages: int
-    totalItems: int
+    pageSize: int  # noqa: N815
+    totalPages: int  # noqa: N815
+    totalItems: int  # noqa: N815
 
 
 class PaginatedDeviceList(BaseModel):

@@ -177,7 +177,7 @@ async def generate_and_send_report_task(
             await send_email_with_attachment(
                 to_email=recipient_email,
                 subject="[WEEKLY OVERVIEW] IT Automation Infrastructure Report",
-                body="Hello,\n\nPlease find attached your weekly automated infrastructure report.\n\nAutomated Systems Engine",
+                body="Hello,\n\nHere is your weekly automated infrastructure report.\n\nAutomated Systems Engine",
                 attachment_bytes=pdf_bytes,
                 filename="weekly_infrastructure_report.pdf",
             )
