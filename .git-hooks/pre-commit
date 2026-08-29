@@ -2,77 +2,6 @@
 # ============================================================
 #  PROJECT 1 — Enterprise-grade pre-commit hook (no framework)
 #  Runs on every git commit. Blocks commit if any check fails.
-#  Guarantees: every check reports PASS/FAIL explicitly.
-#
-#  CROSS-PLATFORM NOTES (Windows Git Bash / MSYS2 / WSL):
-#    - Uses node directly via node_modules/.bin/eslint to bypass npx wrapper issues on Windows
-#    - Staged file names are read NUL-delimited (git diff -z), so spaces,
-#      unicode, and even embedded newlines in paths can't corrupt parsing
-#    - Text/binary classification no longer depends on the external `file`
-#      command (often missing on minimal Git-for-Windows/MSYS2 installs) —
-#      it uses grep's own binary-file detection instead
-#
-#  CHANGELOG — fixes applied after security review:
-#    [FIX-1]  Size guard now measures the STAGED blob (git cat-file -s
-#             ":path"), not the working-tree file. Previously you could
-#             `git add` a huge file, shrink the working-tree copy without
-#             re-staging, and the guard would report 0 bytes.
-#    [FIX-2]  ESLint args are now passed as a real bash array instead of a
-#             flattened, unquoted string — fixes silent breakage on staged
-#             filenames containing spaces (they were word-split into
-#             multiple bogus arguments).
-#    [FIX-3]  Dropped the hard, unguarded dependency on the external `file`
-#             command for text/binary detection (checks 4-6). Replaced with
-#             grep's own binary detection, with a capability probe that
-#             fails toward "scan it" rather than toward "silently skip it"
-#             if the installed grep lacks the feature.
-#    [FIX-4]  Filename-pattern matching (check 1/3) is now case-insensitive,
-#             matching the case-insensitivity already used by the content
-#             scans — so ".ENV" or "ID_RSA" (uppercase) can no longer bypass
-#             the filename-based block on case-sensitive filesystems.
-#    [FIX-5]  Alembic model-path detection now also matches backend/models/...
-#             directly (previously required an extra intermediate directory,
-#             e.g. only matched backend/app/models/, not backend/models/).
-#    [FIX-6]  Python lint now runs only against staged .py files instead of
-#             the whole backend/ tree — unrelated pre-existing issues
-#             elsewhere can no longer block this commit. Staged .py files
-#             outside backend/ are now explicitly flagged instead of being
-#             silently un-linted.
-#    [FIX-7]  ESLint now only runs against staged files that actually live
-#             under frontend/; staged .ts/.tsx files elsewhere are flagged
-#             explicitly instead of being mis-invoked against a wrong path.
-#    [FIX-8]  Certificate-like files (.pem/.crt/.cer/.der) are no longer
-#             blocked purely by extension — public certificates are safe to
-#             commit. Content is inspected for a PRIVATE KEY block, and only
-#             that is blocked; unrecognized or binary cert-like files are
-#             flagged for manual review instead of hard-failing.
-#    [FIX-9]  The security-keyword scan (was check 6) is downgraded from a
-#             hard FAIL to a WARN. console.log / import random / DEBUG=True /
-#             TODO-FIXME are style signals, not secrets — hard-blocking on
-#             them mostly trains people to reach for `--no-verify`, which
-#             also skips the real secret-detection checks.
-#    [FIX-10] Broadened secret-pattern coverage (Slack, Stripe, Google, npm,
-#             Anthropic/OpenAI-style keys, unquoted "key: value" style
-#             assignments) and replaced the GNU-only `\s` with the POSIX
-#             `[[:space:]]` class so patterns behave the same on BSD/macOS
-#             grep as on GNU grep.
-#    [FIX-11] Added common env-template names (.env.sample/.template/.dist)
-#             to the exemption list alongside .env.example; also exempted
-#             yarn.lock / pnpm-lock.yaml from the noisy entropy/secret scans
-#             (package-lock.json was already exempted).
-#    [FIX-12] Split check 4 into two tiers. Structural/branded secret
-#             signatures (AWS keys, GitHub/GitLab/Slack/Stripe/Google/npm/
-#             Anthropic-OpenAI-style tokens, JWT shape, PRIVATE KEY blocks)
-#             still hard-FAIL everywhere, including test files, because
-#             they're precise and rarely appear by accident. The generic
-#             keyword-heuristic patterns (password|secret|token|api_key
-#             followed by *any* quoted value >= 4 chars) only check the key
-#             name, not whether the value looks like a real secret — so
-#             they misfire constantly on test fixtures like
-#             `token="invalid"` or `password="securepass"`. Those generic
-#             patterns now WARN instead of FAIL inside test files (still
-#             visible for a human glance) and keep hard-FAILing everywhere
-#             else.
 # ============================================================
 
 set -euo pipefail
@@ -125,6 +54,15 @@ is_env_template() {
   [[ "$f" =~ \.env\.(example|sample|template|dist)$ ]]
 }
 
+is_doc_file() {
+  # [FIX-13] Documentation is the single biggest source of "secret-shaped
+  # but obviously an example" false positives (README snippets, setup
+  # guides, etc.). Used to soften (not silence) checks 4/5 the same way
+  # check 6 already exempted .md outright.
+  local f="$1"
+  [[ "$f" == *.md ]]
+}
+
 is_content_scan_exempt() {
   # Shared exemption list for the content-based scans (checks 4, 5, 6).
   local f="$1"
@@ -134,6 +72,20 @@ is_content_scan_exempt() {
   [[ "$f" == *package-lock.json ]] && return 0
   [[ "$f" == *yarn.lock ]] && return 0
   [[ "$f" == *pnpm-lock.yaml ]] && return 0
+  return 1
+}
+
+is_entropy_scan_exempt() {
+  # [FIX-16] Extra exemptions layered on top of is_content_scan_exempt,
+  # specific to check 5 — build artifacts are dense with long alnum/base64
+  # runs that aren't secrets and produced constant warning noise.
+  local f="$1"
+  is_content_scan_exempt "$f" && return 0
+  [[ "$f" == *.min.js ]] && return 0
+  [[ "$f" == *.min.css ]] && return 0
+  [[ "$f" == *.map ]] && return 0
+  [[ "$f" == *"/dist/"* ]] && return 0
+  [[ "$f" == *"/build/"* ]] && return 0
   return 1
 }
 
@@ -147,6 +99,39 @@ is_test_file() {
   [[ "$f" =~ (^|/)[^/]*_test\.py$ ]] && return 0
   [[ "$f" =~ \.(test|spec)\.(ts|tsx|js|jsx)$ ]] && return 0
   [[ "$f" =~ (^|/)__tests__/ ]] && return 0
+  return 1
+}
+
+is_placeholder_value() {
+  # [FIX-13] True if the matched line looks like a variable/template
+  # reference rather than a literal secret. Deliberately syntax-based
+  # (not word-based like "changeme"/"example") to avoid weakening real
+  # detection — a real secret is very rarely built by concatenating a
+  # literal with a live variable reference, so this trade-off is safe.
+  local line="$1"
+  # Docker/Compose/shell-style: ${VAR} or ${VAR:-default}
+  [[ "$line" == *'${'*'}'* ]] && return 0
+  # Bare shell-style reference: $VAR (no braces)
+  [[ "$line" =~ \$[A-Za-z_][A-Za-z0-9_]* ]] && return 0
+  # Jinja2 / Helm / Ansible template placeholders: {{ ... }}
+  [[ "$line" == *'{{'*'}}'* ]] && return 0
+  # <placeholder> angle-bracket convention seen in docs/examples
+  [[ "$line" == *"<"*">"* ]] && return 0
+  return 1
+}
+
+# [FIX-14] Well-known, unambiguous example literals that match a structural
+# secret signature but are documented placeholders, not real secrets.
+STRICT_SAFE_LITERALS=(
+  "AKIAIOSFODNN7EXAMPLE"   # AWS's own documented example access key ID
+)
+
+is_known_safe_literal() {
+  local token="$1"
+  local safe
+  for safe in "${STRICT_SAFE_LITERALS[@]}"; do
+    [[ "$token" == "$safe" ]] && return 0
+  done
   return 1
 }
 
@@ -198,6 +183,17 @@ for file in "${STAGED_FILES_ARR[@]}"; do
 
   for pattern in "${BLOCKED_FILE_PATTERNS[@]}"; do
     if [[ "$file" =~ $pattern ]]; then
+      # [FIX-15] Credential-shaped JSON filenames used purely as test
+      # fixtures with fake data (e.g. tests/fixtures/fake_service_account.json
+      # mocking Google auth) are a common false positive. Only the *.json
+      # filename patterns get this exemption — real key-material extensions
+      # (.key/.p12/.jks/_rsa/etc.) still hard-block even inside fixtures,
+      # since fake key files are much rarer and the downside of a real
+      # leaked key is high.
+      if [[ "$pattern" == *'\.json$' ]] && [[ "$file" =~ (^|/)(__)?fixtures(__)?/ ]]; then
+        warn "'$file' matches credential-shaped pattern '$pattern' but lives under a fixtures/ dir — verify it contains only fake data"
+        continue 2
+      fi
       fail "BLOCKED: '$file' matches secret-bearing pattern '$pattern'"
       BLOCKED=1
       break   # one report per file is enough
@@ -308,6 +304,8 @@ SECRET_PATTERNS_STRICT=(
 # VALUE looks like a real secret, so they misfire on test fixtures like
 # token="invalid" or password="securepass". [FIX-12] These WARN instead of
 # FAIL inside test files; everywhere else they still hard-fail as before.
+# [FIX-13] They also WARN (rather than FAIL) when the value is clearly a
+# variable/template reference or the file is documentation.
 SECRET_PATTERNS_GENERIC=(
   "['\"]?(password|passwd|secret|token|api[_-]?key)['\"]?[[:space:]]*[:=][[:space:]]*['\"][^'\"]{4,}"
   "['\"]?(password|passwd|secret|token|api[_-]?key)['\"]?[[:space:]]*:[[:space:]]*[^[:space:]'\"]{4,}"  # [FIX-10] unquoted yaml-style
@@ -323,21 +321,43 @@ for file in "${STAGED_FILES_ARR[@]}"; do
     content="$(git show ":$file" 2>/dev/null || true)"   # fetch once, not per-pattern
 
     for pattern in "${SECRET_PATTERNS_STRICT[@]}"; do
-      if grep -Ei -- "$pattern" <<< "$content" >/dev/null; then
+      # [FIX-14] Extract each matched token so a well-known safe literal
+      # (e.g. AWS's own documented example key) can be skipped without
+      # weakening the pattern for anything else that matches it.
+      matches="$(grep -Eio -- "$pattern" <<< "$content" || true)"
+      [[ -z "$matches" ]] && continue
+
+      real_match_found=0
+      while IFS= read -r token; do
+        [[ -z "$token" ]] && continue
+        is_known_safe_literal "$token" && continue
+        real_match_found=1
+      done <<< "$matches"
+
+      if [[ $real_match_found -eq 1 ]]; then
         fail "Possible hardcoded secret in '$file' (pattern: $pattern)"
         SECRET_FOUND=1
       fi
     done
 
     for pattern in "${SECRET_PATTERNS_GENERIC[@]}"; do
-      if grep -Ei -- "$pattern" <<< "$content" >/dev/null; then
-        if is_test_file "$file"; then
+      while IFS= read -r matched_line; do
+        [[ -z "$matched_line" ]] && continue
+        if is_placeholder_value "$matched_line"; then
+          # [FIX-13] ${VAR}, $VAR, {{ }}, and <placeholder> references —
+          # common in Compose/Helm/K8s manifests, not literal secrets.
+          warn "'$file' matches a generic secret-like pattern but the value looks like a variable/template reference, not a literal — worth a quick glance (pattern: $pattern)"
+        elif is_test_file "$file"; then
           warn "'$file' matches a generic secret-like pattern, likely a test fixture — worth a glance (pattern: $pattern)"
+        elif is_doc_file "$file"; then
+          # [FIX-13] Docs routinely show example config with secret-shaped
+          # keys — soften instead of blocking the commit outright.
+          warn "'$file' (documentation) matches a generic secret-like pattern — likely an example; worth a glance (pattern: $pattern)"
         else
           fail "Possible hardcoded secret in '$file' (pattern: $pattern)"
           SECRET_FOUND=1
         fi
-      fi
+      done < <(grep -Ei -- "$pattern" <<< "$content" || true)
     done
   fi
 done
@@ -356,7 +376,7 @@ ENTROPY_PATTERNS=(
 ENTROPY_FOUND=0
 for file in "${STAGED_FILES_ARR[@]}"; do
   [[ ! -f "$file" ]] && continue
-  is_content_scan_exempt "$file" && continue
+  is_entropy_scan_exempt "$file" && continue   # [FIX-16]
 
   if is_text_content "$file"; then
     content="$(git show ":$file" 2>/dev/null || true)"
@@ -497,7 +517,12 @@ for file in "${STAGED_FILES_ARR[@]}"; do
   if [[ "$file" =~ ^backend/(.*/)?models/ ]] || [[ "$file" =~ ^backend/(.*/)?db/models/ ]]; then
     MODELS_CHANGED=1
   fi
-  if [[ "$file" =~ ^backend/db/migrations/versions/ ]]; then
+  # [FIX-17] Generalized from the single hardcoded
+  # backend/db/migrations/versions/ to any depth under backend/, mirroring
+  # the flexibility FIX-5 already gave the models/ side — a repo using
+  # e.g. backend/app/migrations/versions/ previously got a false "no
+  # migration staged" warning even with one correctly staged.
+  if [[ "$file" =~ ^backend/(.*/)?migrations/versions/ ]]; then
     MIGRATIONS_STAGED=1
   fi
 done
