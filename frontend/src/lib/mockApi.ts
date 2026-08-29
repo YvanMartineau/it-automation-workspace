@@ -19,8 +19,6 @@ type GenerateReportInput = {
   type: string;
 };
 
-// Use the shared report type so generated items stay compatible with the mocked data model.
-const DEFAULT_REPORT_STATUS: ReportStatus = "processing";
 
 let mockStore: Report[] = [...INITIAL_MOCK_REPORTS];
 

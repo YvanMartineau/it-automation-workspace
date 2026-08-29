@@ -2,7 +2,6 @@ import pytest
 from pydantic import ValidationError
 from schemas.auth import LoginRequest, TokenResponse
 
-
 TEST_PASSWORD = "securepass"  # noqa: S105, S106 # nosec
 TEST_ACCESS_TOKEN = "abc"  # noqa: S105, S106 # nosec
 TEST_DEFAULT_TOKEN_TYPE = "bearer"  # noqa: S105, S106 # nosec

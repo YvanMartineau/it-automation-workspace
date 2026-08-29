@@ -2,7 +2,7 @@ import asyncio
 from datetime import UTC, datetime, timedelta
 
 from models.audit_log import AuditLog
-from models.device import Device, DeviceStatus
+from models.device import Device
 from models.device_health_history import DeviceHealthHistory
 from models.onboarded_user import OnboardedUser, OnboardJobStatus
 from schemas.dashboard import (
