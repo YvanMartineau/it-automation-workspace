@@ -111,9 +111,9 @@ async def create_device(db: AsyncSession, actor: str, data: DeviceCreate) -> Dev
 
     try:
         await db.commit()
-    except IntegrityError:
+    except IntegrityError as err:
         await db.rollback()
-        raise DeviceConflictError(data.ip_address)
+        raise DeviceConflictError(data.ip_address) from err
 
     await db.refresh(device)
 
@@ -243,3 +243,4 @@ async def get_device_counts(db: AsyncSession) -> DeviceCounts:
         health_alerts=health_alerts,
         critical_alerts=critical_alerts,
     )
+

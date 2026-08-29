@@ -92,7 +92,7 @@ async def create_device(
         raise HTTPException(
             status_code=status.HTTP_409_CONFLICT,
             detail=str(err),
-        )
+        ) from err
 
     return DeviceRead.model_validate(device)
 
@@ -110,16 +110,16 @@ async def update_device(
     """
     try:
         device = await update_device_service(db, current_user.email, device_id, body)
-    except DeviceNotFoundError:
+    except DeviceNotFoundError as err:
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND,
             detail="Device not found",
-        )
-    except NoUpdateFieldsError:
+        ) from err
+    except NoUpdateFieldsError as err:
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
             detail="No fields to update",
-        )
+        ) from err
 
     return DeviceRead.model_validate(device)
 
@@ -140,11 +140,11 @@ async def delete_device(
     """
     try:
         await delete_device_service(db, current_user.email, device_id)
-    except DeviceNotFoundError:
+    except DeviceNotFoundError as err:
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND,
             detail="Device not found",
-        )
+        ) from err
 
 
 @router.get("/stats", response_model=AssetStatsRead, summary="Aggregate device counts")

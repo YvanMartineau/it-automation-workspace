@@ -1,3 +1,4 @@
+
 # auth_service.py
 """
 Authentication business logic.
@@ -32,7 +33,8 @@ class InvalidCredentialsError(Exception):
 
 
 class InvalidRefreshTokenError(Exception):
-    """Raised when a refresh token is missing, malformed, expired, or belongs to an inactive/unknown user."""
+    """Raised when a refresh token is missing, malformed, expired,
+    or belongs to an inactive/unknown user."""
 
 
 async def authenticate_user(db: AsyncSession, email: str, password: str) -> User:
@@ -154,6 +156,7 @@ async def record_logout(db: AsyncSession, access_token: str | None) -> None:
             user = result.scalar_one_or_none()
             actor = user.email if user is not None else str(user_id)
     except Exception:
-        pass
+        logger.exception("Logout actor resolution failed")
 
     await write_audit_log(db, actor=actor, action="auth.logout")
+

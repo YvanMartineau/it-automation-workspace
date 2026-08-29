@@ -10,8 +10,8 @@ raise plain exceptions (TokenExpiredError / TokenInvalidError) — no FastAPI
 or HTTPException in sight. That's what lets services/auth_service.py call
 decode_token() directly and catch a specific, HTTP-agnostic exception type
 instead of an HTTPException it then has to re-wrap or accidentally leak to
-a caller. get_current_user() and get_admin_user() are FastAPI dependencies
-— they legitimately live in the HTTP layer, so they're the only place in
+a caller. get_current_user() and get_admin_user() are FastAPI dependencies —
+they legitimately live in the HTTP layer, so they're the only place in
 this file that raises HTTPException.
 """
 
@@ -38,7 +38,10 @@ oauth2_scheme = OAuth2PasswordBearer(tokenUrl="/auth/login", auto_error=False)
 
 
 class TokenError(Exception):
-    """Base class for JWT validation failures. Callers can catch this broadly or the specific subtypes below."""
+    """Base class for JWT validation failures.
+
+    Callers can catch this broadly or the specific subtypes below.
+    """
 
 
 class TokenExpiredError(TokenError):
@@ -73,7 +76,11 @@ def _create_token(
     }
     if extra_claims:
         payload.update(extra_claims)
-    return jwt.encode(payload, settings.JWT_SECRET_KEY, algorithm=settings.JWT_ALGORITHM)
+    return jwt.encode(
+        payload,
+        settings.JWT_SECRET_KEY,
+        algorithm=settings.JWT_ALGORITHM,
+    )
 
 
 def create_access_token(user: User) -> str:
@@ -165,26 +172,26 @@ async def get_current_user(
 
     try:
         payload = decode_token(token, expected_type="access")
-    except TokenExpiredError:
+    except TokenExpiredError as err:
         raise HTTPException(
             status_code=status.HTTP_401_UNAUTHORIZED,
             detail="Token has expired",
             headers={"WWW-Authenticate": "Bearer"},
-        )
-    except TokenInvalidError:
+        ) from err
+    except TokenInvalidError as err:
         raise HTTPException(
             status_code=status.HTTP_401_UNAUTHORIZED,
             detail="Could not validate credentials",
             headers={"WWW-Authenticate": "Bearer"},
-        )
+        ) from err
 
     try:
         user_id = UUID(payload.sub)
-    except ValueError:
+    except ValueError as err:
         raise HTTPException(
             status_code=status.HTTP_401_UNAUTHORIZED,
             detail="Invalid token subject",
-        )
+        ) from err
 
     try:
         result = await db.execute(select(User).where(User.id == user_id))
@@ -215,7 +222,9 @@ async def get_admin_user(current_user: User = Depends(get_current_user)) -> User
     Handles both Enum-based and string-based role representations.
     """
     role_value = (
-        current_user.role.value if isinstance(current_user.role, Enum) else str(current_user.role)
+        current_user.role.value
+        if isinstance(current_user.role, Enum)
+        else str(current_user.role)
     )
 
     if role_value.lower() != "admin":
@@ -224,3 +233,4 @@ async def get_admin_user(current_user: User = Depends(get_current_user)) -> User
             detail="Admin privileges required",
         )
     return current_user
+

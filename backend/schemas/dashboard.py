@@ -12,7 +12,7 @@ shape 1:1 avoids an alias/mapping layer in the TanStack Query hook.
 from datetime import datetime
 from typing import Literal
 
-from pydantic import BaseModel
+from pydantic import BaseModel, Field
 
 HealthStatus = Literal["healthy", "warning", "critical"]
 AuditActivityType = Literal["update", "create", "delete", "alert", "report"]
@@ -45,7 +45,7 @@ class OSDistributionItem(BaseModel):
 class OnboardingVolumePoint(BaseModel):
     week: str
     completed: int
-    inProgress: int
+    in_progress: int = Field(alias="inProgress")
     failed: int
 
 
@@ -54,7 +54,7 @@ class AuditActivityItem(BaseModel):
     type: AuditActivityType
     actor: str
     target: str
-    targetLabel: str
+    target_label: str = Field(alias="targetLabel")
     description: str
     timestamp: datetime
 
@@ -66,3 +66,4 @@ class DashboardSnapshot(BaseModel):
     onboardingVolume: list[OnboardingVolumePoint]
     auditActivity: list[AuditActivityItem]
     generatedAt: datetime
+

@@ -1,3 +1,8 @@
+import logging
+
+from models.audit_log import AuditLog
+from sqlalchemy.ext.asyncio import AsyncSession
+
 """Audit log FastAPI dependency — writes AuditLog on every mutating operation."""
 
 # audit_middleware.py
@@ -15,10 +20,6 @@ atomic with the parent write in a later hardening pass, that's a deliberate
 follow-up — not addressed here, since the spec explicitly wants audit
 failures to be non-fatal to the primary operation.
 """
-import logging
-
-from models.audit_log import AuditLog
-from sqlalchemy.ext.asyncio import AsyncSession
 
 logger = logging.getLogger("sysops.audit")
 

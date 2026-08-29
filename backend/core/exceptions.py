@@ -116,7 +116,10 @@ def setup_exception_handlers(app: FastAPI) -> None:
             content={
                 "error": {
                     "code": status.HTTP_500_INTERNAL_SERVER_ERROR,
-                    "message": "An unexpected internal server error occurred. System operators have been notified.",
+                    "message": (
+                        "An unexpected internal server error occurred. "
+                        "System operators have been notified."
+                    ),
                     "type": "InternalServerError",
                 }
             },
