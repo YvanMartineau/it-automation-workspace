@@ -256,7 +256,7 @@ class TestGetCurrentUser:
 # -------------------------------
 # get_admin_user dependency
 # -------------------------------
-class TestGetAdminUser: #test skipped in CI github
+class TestGetAdminUser:  # test skipped in CI github
     @pytest.mark.skip(reason="get_admin_user returns coroutine, needs implementation review")
     def test_non_admin_returns_403(self):
         viewer = FakeUser(id=uuid.uuid4(), role=Role.VIEWER, email="viewer@example.com")
