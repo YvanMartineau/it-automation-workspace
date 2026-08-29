@@ -23,7 +23,7 @@ import {
   type SortingState,
   type VisibilityState,
 } from "@tanstack/react-table";
-import { getAssetColumns } from "#/components/data-display/AssetColumns";
+import { getAssetColumns } from "#/components/data-display/AssetColumnFactory";
 import { useDeleteAsset } from "#/hooks/useAssets";
 import type { Asset, PaginatedAssetList } from "#/types/asset";
 
