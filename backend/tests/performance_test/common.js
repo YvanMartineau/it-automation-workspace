@@ -1,3 +1,4 @@
+//backend/tests/performance_test/common.js
 import http from "k6/http";
 import { check, fail } from "k6";
 import exec from "k6/execution";
@@ -30,4 +31,11 @@ export function envJson(name, fallback) {
   if (!__ENV[name]) return fallback;
   try { return JSON.parse(__ENV[name]); }
   catch (e) { fail(`${name} must be valid JSON: ${e}`); }
+}
+// backend/tests/performance_test/common.js - add at bottom
+export function toQueryString(obj) {
+  return Object.entries(obj)
+    .filter(([,v]) => v !== undefined && v !== null && v !== '')
+    .map(([k,v]) => `${encodeURIComponent(k)}=${encodeURIComponent(v)}`)
+    .join('&');
 }

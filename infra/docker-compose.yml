@@ -27,8 +27,46 @@ services:
         condition: service_healthy
     restart: unless-stopped
     mem_limit: 512m
+    healthcheck:
+      test:
+        [
+          "CMD",
+          "python",
+          "-c",
+          "import urllib.request; urllib.request.urlopen('http://127.0.0.1:8000/health', timeout=2)"
+        ]
+      interval: 5s
+      timeout: 3s
+      retries: 12
+      start_period: 10s
+      
     command: uvicorn main:app --host 0.0.0.0 --port 8000 --reload
 
+
+
+  k6:
+    image: grafana/k6:latest
+    network_mode: "host"
+    working_dir: /performance
+
+    volumes:
+      - ../backend/tests/performance_test:/performance:ro
+      - ../performance-results:/results
+
+    environment:
+      BASE_URL: ${PERF_BASE_URL} #${PERF_BASE_URL:-http://127.0.0.1:8000}
+      PERF_USER_EMAIL: ${PERF_USER_EMAIL}
+      PERF_USER_PASSWORD: ${PERF_USER_PASSWORD}
+      SCAN_SUBNET: ${SCAN_SUBNET} #${SCAN_SUBNET:-192.168.179.0/24}
+
+    profiles:
+      - performance
+
+    depends_on:
+      fastapi:
+        condition: service_healthy
+
+    entrypoint: ["k6"]
 
   openldap:
     image: vegardit/openldap:latest
@@ -89,9 +127,10 @@ services:
   postgres_local:
     image: postgres:16-alpine
     environment:
-      POSTGRES_DB: automation_dev
-      POSTGRES_USER: dev
-      POSTGRES_PASSWORD: dev
+      POSTGRES_DB: ${POSTGRES_DB:-automation_dev}
+      POSTGRES_USER: ${POSTGRES_USER:-dev}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-dev}
+
     #command is used to set PostgreSQL configuration parameters
     command: >
       postgres
@@ -115,8 +154,8 @@ services:
     extra_hosts:
       - "host.docker.internal:host-gateway"
     environment:
-      PGADMIN_DEFAULT_EMAIL: admin@dev.de
-      PGADMIN_DEFAULT_PASSWORD: dev
+      PGADMIN_DEFAULT_EMAIL: ${PGADMIN_DEFAULT_EMAIL}
+      PGADMIN_DEFAULT_PASSWORD: ${PGADMIN_DEFAULT_PASSWORD}
       #added to avoid error: "pgAdmin4 is running in SERVER_MODE. Please set PGADMIN_CONFIG_SERVER_MODE to False to run in DESKTOP_MODE."
       PGADMIN_CONFIG_SERVER_MODE: 'False'
     ports:
