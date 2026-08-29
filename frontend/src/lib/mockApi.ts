@@ -1,5 +1,26 @@
-import { Report, GenerateReportInput } from "#/types/report";
 import { INITIAL_MOCK_REPORTS } from "./mockReports";
+
+// Align with the mocked report status values without importing a non-exported type.
+type ReportStatus = "processing" | "completed" | "failed";
+
+type Report = {
+  id: string;
+  title: string;
+  type: string;
+  status: ReportStatus;
+  generatedAt: string;
+  generatedBy: string;
+  fileSizeBytes?: number;
+  downloadUrl?: string;
+};
+
+type GenerateReportInput = {
+  title: string;
+  type: string;
+};
+
+// Use the shared report type so generated items stay compatible with the mocked data model.
+const DEFAULT_REPORT_STATUS: ReportStatus = "processing";
 
 let mockStore: Report[] = [...INITIAL_MOCK_REPORTS];
 

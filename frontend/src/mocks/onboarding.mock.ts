@@ -1,5 +1,30 @@
 // src/mocks/onboarding.mock.ts
-import type { OnboardingRecord, OnboardingStatus, CreateOnboardingRequest } from "#types/onboarding.ts";
+
+type OnboardingStatus =
+  | "PENDING"
+  | "AD_CREATING"
+  | "EMAIL_SENDING"
+  | "JIRA_CREATING"
+  | "COMPLETED"
+  | "FAILED";
+
+type OnboardingRecord = {
+  id: string;
+  name: string;
+  department: string;
+  role: string;
+  status: OnboardingStatus;
+  source: string;
+  simulationLog: string[];
+  createdAt: string;
+  updatedAt: string;
+};
+
+type CreateOnboardingRequest = {
+  name: string;
+  department: string;
+  role: string;
+};
 
 const MOCK_DELAY = 800; // Simulate network latency
 
@@ -64,6 +89,7 @@ export const mockCreateOnboarding = async (data: CreateOnboardingRequest): Promi
   const newRecord: OnboardingRecord = {
     id: Math.random().toString(36).substring(7),
     ...data,
+    source: "local_db",
     status: "PENDING",
     simulationLog: generateSimulationLog(data.name, data.department, "PENDING"),
     createdAt: new Date().toISOString(),

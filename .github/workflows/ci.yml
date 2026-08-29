@@ -53,11 +53,12 @@ jobs:
       - name: Install dependencies
         run: pip install --upgrade pip && pip install -r backend/requirements.txt
 
-      - name: Ruff format
-        run: ruff format backend/
-
-      - name: Ruff lint with auto-fix
-        run: ruff check backend/ --fix
+      # Format and lint are now real gates: no --fix, no unchecked `format`.
+      # Previously `ruff format` and `ruff check --fix` ran first and rewrote
+      # files in place before the final `ruff check` saw them — so that last
+      # step basically always passed, even on a commit with real violations.
+      - name: Ruff format check
+        run: ruff format backend/ --check
 
       - name: Ruff lint check
         run: ruff check backend/
@@ -85,13 +86,35 @@ jobs:
             --cov-report=xml \
             --cov-fail-under=70 -v
         env:
+          # settings.py requires DATABASE_URL unconditionally — DEV_DATABASE_URL
+          # and TEST_DATABASE_URL are optional overrides only. Both are set here
+          # to the same value so nothing that reads either name breaks.
+          DATABASE_URL: postgresql+asyncpg://dev:dev@127.0.0.1:5432/automation_dev
           DEV_DATABASE_URL: postgresql+asyncpg://dev:dev@127.0.0.1:5432/automation_dev
+
           JWT_SECRET_KEY: ci-test-secret-key-must-be-32-bytes-longx
           JWT_ALGORITHM: HS256
           ACCESS_TOKEN_EXPIRE_MINUTES: "15"
           REFRESH_TOKEN_EXPIRE_DAYS: "7"
+
+          # IDENTITY_PROVIDER defaults to "ldap" in settings.py, which triggers
+          # a model_validator requiring LDAP_BIND_PASSWORD to be non-empty.
+          # CI has no LDAP service container, so force the "local" branch
+          # instead of standing one up. Switch this (and add an openldap
+          # service) if/when tests need to exercise the real LDAP bind path.
+          IDENTITY_PROVIDER: local
+
           N8N_ONBOARDING_WEBHOOK_URL: http://localhost:5678/webhook/
           N8N_WEBHOOK_TIMEOUT_SECONDS: "5"
+
+          # Required by settings.py (no default) but never hit a real Gmail
+          # account in tests — these exist purely to satisfy Pydantic
+          # validation at import time. Not real secrets, safe to keep inline.
+          GMAIL_OAUTH_CLIENT_ID: ci-mock.apps.googleusercontent.com
+          GMAIL_OAUTH_CLIENT_SECRET: ci-mock
+          GMAIL_OAUTH_REFRESH_TOKEN: ci-mock
+          GMAIL_SENDER_ADDRESS: ci@mock.com
+
           FRONTEND_URL: http://localhost:5173
           ALLOWED_SCAN_SUBNET: 192.168.179.0/24
           APP_ENV: test

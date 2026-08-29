@@ -1,4 +1,21 @@
-import { Report } from "#/types/report";
+type ReportType =
+  | "asset_inventory"
+  | "health_audit"
+  | "onboarding_summary"
+  | "compliance_log";
+
+type ReportStatus = "completed" | "processing" | "failed";
+
+interface Report {
+  id: string;
+  title: string;
+  type: ReportType;
+  status: ReportStatus;
+  generatedAt: string;
+  generatedBy: string;
+  fileSizeBytes?: number;
+  downloadUrl?: string;
+}
 
 export const INITIAL_MOCK_REPORTS: Report[] = [
   {
