@@ -85,6 +85,7 @@ class ScanProgressData(BaseModel):
     since sse-starlette streams are outside FastAPI's response_model
     validation path.
     """
+
     model_config = ConfigDict(from_attributes=True)
 
     hosts_found: int

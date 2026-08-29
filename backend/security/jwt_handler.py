@@ -101,7 +101,7 @@ def create_access_token(user: User) -> str:
     return _create_token(
         subject=str(user.id),
         expires_delta=timedelta(minutes=settings.ACCESS_TOKEN_EXPIRE_MINUTES),
-        token_type="access", # noqa: S106 # nosec
+        token_type="access",  # noqa: S106 # nosec
         extra_claims={"role": role_value, "email": user.email},
     )
 
@@ -118,7 +118,7 @@ def create_refresh_token(user_id: UUID) -> str:
     return _create_token(
         subject=str(user_id),
         expires_delta=timedelta(days=settings.REFRESH_TOKEN_EXPIRE_DAYS),
-        token_type="refresh", # noqa: S106 # noqa: S106 # nosec
+        token_type="refresh",  # noqa: S106 # noqa: S106 # nosec
     )
 
 
@@ -222,9 +222,7 @@ async def get_admin_user(current_user: User = Depends(get_current_user)) -> User
     Handles both Enum-based and string-based role representations.
     """
     role_value = (
-        current_user.role.value
-        if isinstance(current_user.role, Enum)
-        else str(current_user.role)
+        current_user.role.value if isinstance(current_user.role, Enum) else str(current_user.role)
     )
 
     if role_value.lower() != "admin":
@@ -233,4 +231,3 @@ async def get_admin_user(current_user: User = Depends(get_current_user)) -> User
             detail="Admin privileges required",
         )
     return current_user
-

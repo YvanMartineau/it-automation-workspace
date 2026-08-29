@@ -1,4 +1,3 @@
-
 # auth_service.py
 """
 Authentication business logic.
@@ -159,4 +158,3 @@ async def record_logout(db: AsyncSession, access_token: str | None) -> None:
         logger.exception("Logout actor resolution failed")
 
     await write_audit_log(db, actor=actor, action="auth.logout")
-

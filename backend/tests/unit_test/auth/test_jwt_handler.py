@@ -103,7 +103,7 @@ class TestDecodeToken:
     def test_decode_access_token(self, access_token):
         payload = decode_token(access_token, expected_type="access")
         assert isinstance(payload, TokenPayload)
-        assert payload.token_type == "access" # noqa: S105
+        assert payload.token_type == "access"  # noqa: S105
 
     def test_decode_refresh_token(self, refresh_token):
         payload = decode_token(refresh_token, expected_type="refresh")

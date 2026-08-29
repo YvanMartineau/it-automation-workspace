@@ -243,4 +243,3 @@ async def get_device_counts(db: AsyncSession) -> DeviceCounts:
         health_alerts=health_alerts,
         critical_alerts=critical_alerts,
     )
-
