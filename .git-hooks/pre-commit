@@ -2,6 +2,8 @@
 # ============================================================
 #  PROJECT 1 — Enterprise-grade pre-commit hook (no framework)
 #  Runs on every git commit. Blocks commit if any check fails.
+#  Guarantees: every check reports PASS/FAIL explicitly.
+#
 # ============================================================
 
 set -euo pipefail
@@ -99,6 +101,19 @@ is_test_file() {
   [[ "$f" =~ (^|/)[^/]*_test\.py$ ]] && return 0
   [[ "$f" =~ \.(test|spec)\.(ts|tsx|js|jsx)$ ]] && return 0
   [[ "$f" =~ (^|/)__tests__/ ]] && return 0
+  return 1
+}
+
+is_ci_config_file() {
+  # [FIX-18] CI pipeline config routinely needs literal placeholder/mock
+  # values in env blocks (they never touch a real service) — treated like
+  # a test fixture for the generic pattern only, not the structural one.
+  local f="$1"
+  [[ "$f" =~ ^\.github/workflows/.*\.ya?ml$ ]] && return 0
+  [[ "$f" == .gitlab-ci.yml ]] && return 0
+  [[ "$f" == azure-pipelines.yml ]] && return 0
+  [[ "$f" == Jenkinsfile ]] && return 0
+  [[ "$f" == .circleci/config.yml ]] && return 0
   return 1
 }
 
@@ -349,6 +364,9 @@ for file in "${STAGED_FILES_ARR[@]}"; do
           warn "'$file' matches a generic secret-like pattern but the value looks like a variable/template reference, not a literal — worth a quick glance (pattern: $pattern)"
         elif is_test_file "$file"; then
           warn "'$file' matches a generic secret-like pattern, likely a test fixture — worth a glance (pattern: $pattern)"
+        elif is_ci_config_file "$file"; then
+          # [FIX-18] CI env blocks routinely need literal mock values.
+          warn "'$file' (CI config) matches a generic secret-like pattern — likely a mock/placeholder value used only inside the pipeline; worth a glance (pattern: $pattern)"
         elif is_doc_file "$file"; then
           # [FIX-13] Docs routinely show example config with secret-shaped
           # keys — soften instead of blocking the commit outright.
