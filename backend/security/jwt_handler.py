@@ -101,7 +101,7 @@ def create_access_token(user: User) -> str:
     return _create_token(
         subject=str(user.id),
         expires_delta=timedelta(minutes=settings.ACCESS_TOKEN_EXPIRE_MINUTES),
-        token_type="access", # nosec: S106 - public JWT claim, not a secret
+        token_type="access", # noqa: S106 # nosec
         extra_claims={"role": role_value, "email": user.email},
     )
 
@@ -118,7 +118,7 @@ def create_refresh_token(user_id: UUID) -> str:
     return _create_token(
         subject=str(user_id),
         expires_delta=timedelta(days=settings.REFRESH_TOKEN_EXPIRE_DAYS),
-        token_type="refresh", # noqa: S106 # nosec: S106 - public JWT claim, not a secret
+        token_type="refresh", # noqa: S106 # noqa: S106 # nosec
     )
 
 

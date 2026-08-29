@@ -1,31 +1,26 @@
-# backend/tests/unit_test/auth/test_schema_auth.py
 import pytest
 from pydantic import ValidationError
 from schemas.auth import LoginRequest, TokenResponse
 
 
-# helpers return the dummy values - so the line with password= is not
-# password="literal" anymore
-def _pwd() -> str:
-    return "securepass"
-
-
-def _tok() -> str:
-    return "token123"
+TEST_PASSWORD = "securepass"
+TEST_ACCESS_TOKEN = "abc"
+TEST_DEFAULT_TOKEN_TYPE = "bearer"
+TEST_TOKEN = "token123"
 
 
 class TestLoginRequest:
     def test_valid_login(self):
-        req = LoginRequest(email="user@example.com", password=_pwd())
+        req = LoginRequest(email="user@example.com", password=TEST_PASSWORD)
         assert req.email == "user@example.com"
 
     def test_invalid_email(self):
         with pytest.raises(ValidationError):
-            LoginRequest(email="not-an-email", password=_pwd())
+            LoginRequest(email="not-an-email", password=TEST_PASSWORD)
 
     def test_missing_email(self):
         with pytest.raises(ValidationError):
-            LoginRequest(password=_pwd())
+            LoginRequest(password=TEST_PASSWORD)
 
     def test_missing_password(self):
         with pytest.raises(ValidationError):
@@ -38,15 +33,14 @@ class TestLoginRequest:
 
 class TestTokenResponse:
     def test_default_token_type(self):
-        resp = TokenResponse(access_token=_tok())
-        assert resp.token_type == "bearer"  # nosec S105
+        resp = TokenResponse(access_token=TEST_TOKEN)
+        assert resp.token_type == TEST_DEFAULT_TOKEN_TYPE
 
     def test_from_attributes(self):
         class FakeToken:
-            # 3 chars -> does NOT trigger {4,} rule, keep short
-            access_token = "abc"  # nosec S105
-            token_type = "bearer"  # nosec S105
+            access_token = TEST_ACCESS_TOKEN
+            token_type = TEST_DEFAULT_TOKEN_TYPE
 
         resp = TokenResponse.model_validate(FakeToken())
-        assert resp.access_token == "abc"  # nosec S105
-        assert resp.token_type == "bearer"  # nosec S105
+        assert resp.access_token == TEST_ACCESS_TOKEN
+        assert resp.token_type == TEST_DEFAULT_TOKEN_TYPE
