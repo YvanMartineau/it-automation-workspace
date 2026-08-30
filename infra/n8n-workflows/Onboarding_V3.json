@@ -1,0 +1,260 @@
+{
+  "name": "Onboarding V3",
+  "nodes": [
+    {
+      "parameters": {
+        "sendTo": "=tiafricanwilddog@gmail.com",
+        "subject": "=Welcome on Board {{ $json.body.first_name }} {{ $json.body.last_name }},",
+        "message": "=Hi {{ $json.body.first_name }}, Welcome to the team! Your account has been created.\n\nDepartment: {{ $json.body.department }}\nRole: {{ $json.body.job_title }}\n\n{{ $json.body.password_rotated ? 'Your temporary password: ' + $json.body.temporary_password + '\\n\\nPlease log in and note that this password is one-time use — on next login you will be required to enter a new password.' : 'Your account access is unchanged from before. If you need your password reset, please contact IT.' }}\n\nBest,\nIT Team",
+        "options": {}
+      },
+      "type": "n8n-nodes-base.gmail",
+      "typeVersion": 2.2,
+      "position": [
+        176,
+        0
+      ],
+      "id": "f423f26f-53ad-4cc1-841d-5490aa0652b4",
+      "name": "Send a message",
+      "webhookId": "2ece4692-eced-4c02-9585-4edee29db49c",
+      "retryOnFail": true,
+      "onError": "continueErrorOutput",
+      "notesInFlow": false,
+      "credentials": {
+        "gmailOAuth2": {
+          "id": "IOJoiE5998sjdUoH",
+          "name": "Gmail account"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "project": {
+          "__rl": true,
+          "value": "10001",
+          "mode": "list",
+          "cachedResultName": "Support"
+        },
+        "issueType": {
+          "__rl": true,
+          "value": "10011",
+          "mode": "list",
+          "cachedResultName": "Task"
+        },
+        "summary": "=IT Onboarding ",
+        "additionalFields": {
+          "description": "={{ $json.body.department }}"
+        }
+      },
+      "type": "n8n-nodes-base.jira",
+      "typeVersion": 1,
+      "position": [
+        528,
+        0
+      ],
+      "id": "524f9b81-7c36-4d29-907f-e06db092a15c",
+      "name": "Create an issue",
+      "retryOnFail": true,
+      "onError": "continueErrorOutput",
+      "credentials": {
+        "jiraSoftwareCloudApi": {
+          "id": "SzvdHHpX70gvPvQI",
+          "name": "Jira SW Cloud account"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "=http://host.docker.internal:8000/onboard/jobs/{{$('Webhook').item.json.body.job_id}}/status",
+        "authentication": "genericCredentialType",
+        "genericAuthType": "httpHeaderAuth",
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={\"status\": \"COMPLETED\"}",
+        "options": {
+          "response": {
+            "response": {
+              "fullResponse": true
+            }
+          }
+        }
+      },
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.5,
+      "position": [
+        688,
+        0
+      ],
+      "id": "cbbe4014-f697-49c8-95c2-27d69e040fce",
+      "name": "HTTP Request1",
+      "retryOnFail": true,
+      "credentials": {
+        "httpHeaderAuth": {
+          "id": "HCTgUu9D1LoXNUtI",
+          "name": "Header Auth account"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "=http://host.docker.internal:8000/onboard/jobs/{{$('Webhook').item.json.body.job_id}}/status",
+        "authentication": "genericCredentialType",
+        "genericAuthType": "httpHeaderAuth",
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={\"status\": \"FAILED\", \"error\": \"{{$json.error.message}}\"}",
+        "options": {
+          "response": {
+            "response": {
+              "fullResponse": true
+            }
+          }
+        }
+      },
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.5,
+      "position": [
+        352,
+        144
+      ],
+      "id": "51bebde2-d54b-419d-be75-d257b2153668",
+      "name": "HTTP Request2",
+      "retryOnFail": true,
+      "credentials": {
+        "httpHeaderAuth": {
+          "id": "HCTgUu9D1LoXNUtI",
+          "name": "Header Auth account"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "httpMethod": "POST",
+        "path": "onboarding",
+        "options": {}
+      },
+      "type": "n8n-nodes-base.webhook",
+      "typeVersion": 2.1,
+      "position": [
+        -64,
+        0
+      ],
+      "id": "f137ad9e-c369-41eb-b3c3-77b10ba05fb3",
+      "name": "Webhook",
+      "webhookId": "15c4fe66-93a0-4352-be25-2767dd517d01",
+      "retryOnFail": false
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "=http://host.docker.internal:8000/onboard/jobs/{{$('Webhook').item.json.body.job_id}}/status",
+        "authentication": "genericCredentialType",
+        "genericAuthType": "httpHeaderAuth",
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={\"status\": \"JIRA_CREATING\"}",
+        "options": {
+          "response": {
+            "response": {
+              "fullResponse": true
+            }
+          }
+        }
+      },
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.5,
+      "position": [
+        352,
+        0
+      ],
+      "id": "dd63d606-7d97-4a6a-ab36-3864cd5cba19",
+      "name": "HTTP Request",
+      "retryOnFail": true,
+      "notesInFlow": true,
+      "alwaysOutputData": false,
+      "executeOnce": false,
+      "credentials": {
+        "httpHeaderAuth": {
+          "id": "HCTgUu9D1LoXNUtI",
+          "name": "Header Auth account"
+        }
+      }
+    }
+  ],
+  "pinData": {},
+  "connections": {
+    "Send a message": {
+      "main": [
+        [
+          {
+            "node": "HTTP Request",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "HTTP Request2",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Create an issue": {
+      "main": [
+        [
+          {
+            "node": "HTTP Request1",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "HTTP Request2",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Webhook": {
+      "main": [
+        [
+          {
+            "node": "Send a message",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "HTTP Request": {
+      "main": [
+        [
+          {
+            "node": "Create an issue",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  },
+  "active": true,
+  "settings": {
+    "executionOrder": "v1",
+    "binaryMode": "separate"
+  },
+  "versionId": "57987814-8352-4620-902f-fedf9a1e7eb3",
+  "meta": {
+    "templateCredsSetupCompleted": true,
+    "instanceId": "a05e93f38af052f3a91798ba8415f78829da3d880d00ad94022aa1b237e03a9c"
+  },
+  "nodeGroups": [],
+  "id": "i6kzdMoGAuzSr5ak",
+  "tags": []
+}

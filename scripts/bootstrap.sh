@@ -160,6 +160,23 @@ git commit --no-verify \
   -m "chore(init): bootstrap project 1 workspace" \
   && ok "Initial commit created" || warn "Commit skipped (nothing new or already committed)"
 
+
+# Append to scripts/bootstrap.sh to automate host crontab registration on execution
+
+# 9/9 - Automated Backup Cron Registration
+step "9/9  Automated Backup Cron Registration"
+mkdir -p "$REPO_ROOT/logs" "$REPO_ROOT/backups/postgres"
+
+CRON_JOB="0 2 * * * $REPO_ROOT/scripts/db-backup.sh >> $REPO_ROOT/logs/backup.log 2>&1"
+
+if crontab -l 2>/dev/null | grep -Fq "db-backup.sh"; then
+  ok "Backup cron job already registered"
+else
+  (crontab -l 2>/dev/null; echo "$CRON_JOB") | crontab -
+  ok "Database backup cron job automatically added to host crontab"
+fi
+
+
 echo -e "\n${GREEN}${BOLD}Bootstrap complete!${RESET}\n"
 echo "  Next steps:"
 echo "  1.  Fill in .env  (DATABASE_URL, GRAPH_*, GMAIL_*, N8N_*)"
