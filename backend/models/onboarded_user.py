@@ -42,8 +42,9 @@ class OnboardJobStatus(str, enum.Enum):
     AD_CREATING = "AD_CREATING"
     EMAIL_SENDING = "EMAIL_SENDING"
     JIRA_CREATING = "JIRA_CREATING"
+    PARTIALLY_COMPLETE = "PARTIALLY_COMPLETE"  # AD account exists; email/Jira not confirmed
     COMPLETED = "COMPLETED"
-    FAILED = "FAILED"
+    FAILED = "FAILED"  # AD account was never created
 
 
 class OnboardedUser(Base):
@@ -84,7 +85,9 @@ class OnboardedUser(Base):
     error_message: Mapped[str | None] = mapped_column(String(1000), nullable=True)
 
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())
-    updated_at: Mapped[datetime | None] = mapped_column(
-        DateTime(timezone=True), onupdate=func.now()
+    updated_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True),
+        server_default=func.now(),
+        onupdate=func.now(),
     )
     offboarded_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)

@@ -42,6 +42,9 @@ class Settings(BaseSettings):
     LDAP_USERS_OU: str = "ou=Users,DC=itautomation,DC=local"
     LDAP_GROUPS_OU: str = "ou=Groups,DC=itautomation,DC=local"
 
+    # ONBOARDING
+    ONBOARDING_STALE_TIMEOUT_MINUTES: int = 2
+
     @model_validator(mode="after")
     def _validate_identity_provider_config(self) -> "Settings":
         if self.IDENTITY_PROVIDER == "ldap" and not self.LDAP_BIND_PASSWORD:

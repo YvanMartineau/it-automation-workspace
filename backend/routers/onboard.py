@@ -1,28 +1,38 @@
 """
 POST /onboard — starts onboarding as an async job (real progress tracking).
 POST /onboard/{user_id}/offboard — revokes access, soft-delete, idempotent.
+Only legal once job_status == COMPLETED — a real, active employee leaving.
+POST /onboard/{user_id}/rollback — hard delete for a FAILED or
+PARTIALLY_COMPLETE onboarding that never became a real active employee.
 GET /onboard — the platform's own operational record (Postgres), not a
 live directory query. GET /onboard/jobs/{job_id}/stream — SSE progress.
 POST /onboard/jobs/{job_id}/status — n8n's callback, shared-secret guarded.
+POST /onboard/jobs/{job_id}/retry — re-run (FAILED) or resume (PARTIALLY_COMPLETE).
 """
 
 import json
+import secrets
 from typing import Literal
 from uuid import UUID, uuid4
 
-from core.exceptions import NotFoundError
+from core.exceptions import ConflictError, NotFoundError
 from core.job_store import create_job, get_job, update_job_status
 from db.engine import get_db
 from fastapi import APIRouter, BackgroundTasks, Depends, Header, HTTPException, status
 from middleware.audit_middleware import write_audit_log
-from models.onboarded_user import OnboardedUser, OnboardJobStatus
+from models.onboarded_user import OnboardedUser, OnboardJobStatus, ProvisioningSource
 from models.user import User
 from pydantic import BaseModel
 from schemas.onboard import OffboardResponse, OnboardedUserListItem, OnboardRequest
 from security.jwt_handler import get_admin_user
 from services.n8n_client import trigger_offboarding_workflow
 from services.onboarding_pipeline import resume_onboarding_pipeline, run_onboarding_pipeline
-from services.onboarding_record_service import mark_offboarded, update_onboarding_job_status
+from services.onboarding_record_service import (
+    create_pending_onboarding_record,
+    hard_delete_onboarding_record,
+    mark_offboarded,
+    update_onboarding_job_status,
+)
 from services.provisioning.base import UserProvisioningService
 from services.provisioning.factory import get_provisioning_service
 from settings import get_settings
@@ -48,10 +58,32 @@ class OnboardJobStarted(BaseModel):
 async def onboard_user(
     body: OnboardRequest,
     background_tasks: BackgroundTasks,
+    db: AsyncSession = Depends(get_db),
     current_user: User = Depends(get_admin_user),
 ) -> OnboardJobStarted:
     job = create_job(initial_status="PENDING")
     user_id = uuid4()
+
+    # Written synchronously, before the 202 goes out — a worker crash right
+    # after this response is sent still leaves a durable PENDING row for
+    # the sweeper to find. The background task below never re-creates it.
+    try:
+        await create_pending_onboarding_record(
+            db,
+            user_id=user_id,
+            job_id=job.job_id,
+            requested_by=current_user.email,
+            first_name=body.first_name,
+            last_name=body.last_name,
+            email=body.email,
+            department=body.department,
+            job_title=body.job_title,
+            provisioning_source=ProvisioningSource(settings.IDENTITY_PROVIDER),
+        )
+        await db.commit()
+    except ConflictError as err:
+        raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail=str(err)) from err
+
     background_tasks.add_task(
         run_onboarding_pipeline,
         job.job_id,
@@ -77,7 +109,7 @@ async def stream_onboarding_progress(job_id: str, current_user: User = Depends(g
         while True:
             event = await job.queue.get()
             yield {"event": "status", "data": json.dumps(event)}
-            if event["status"] in ("COMPLETED", "FAILED"):
+            if event["status"] in ("COMPLETED", "FAILED", "PARTIALLY_COMPLETE"):
                 break
 
     return EventSourceResponse(event_generator())
@@ -99,7 +131,9 @@ async def report_job_status(
     x_callback_secret: str = Header(default=""),
     db: AsyncSession = Depends(get_db),
 ) -> None:
-    if not settings.N8N_CALLBACK_SECRET or x_callback_secret != settings.N8N_CALLBACK_SECRET:
+    if not settings.N8N_CALLBACK_SECRET or not secrets.compare_digest(
+        x_callback_secret, settings.N8N_CALLBACK_SECRET
+    ):
         raise HTTPException(status_code=401, detail="Invalid or missing callback secret")
 
     if get_job(job_id) is None:
@@ -127,7 +161,10 @@ async def report_job_status(
     description=(
         "Revokes directory access for a previously onboarded user — soft-delete "
         "(status flip), never a hard delete. Idempotent: re-calling on an "
-        "already-offboarded user is a no-op that returns the original record."
+        "already-offboarded user is a no-op that returns the original record. "
+        "Only legal once job_status is COMPLETED — a real, active employee "
+        "leaving. Use /rollback for a FAILED or PARTIALLY_COMPLETE onboarding "
+        "that never became a real employee."
     ),
 )
 async def offboard_user(
@@ -137,6 +174,19 @@ async def offboard_user(
     current_user: User = Depends(get_admin_user),
     provisioning: UserProvisioningService = Depends(get_provisioning_service),
 ) -> OffboardResponse:
+    result = await db.execute(select(OnboardedUser).where(OnboardedUser.id == user_id))
+    record = result.scalar_one_or_none()
+    if record is None:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Unknown user_id")
+    if record.job_status != OnboardJobStatus.COMPLETED:
+        raise HTTPException(
+            status_code=status.HTTP_409_CONFLICT,
+            detail=(
+                f"Offboarding requires a fully completed onboarding "
+                f"(current: {record.job_status.value}). Use /rollback instead."
+            ),
+        )
+
     try:
         deactivated = await provisioning.deactivate_user(user_id)
     except NotFoundError as err:
@@ -175,6 +225,54 @@ async def offboard_user(
     )
 
 
+@router.post(
+    "/{user_id}/rollback",
+    status_code=status.HTTP_204_NO_CONTENT,
+    summary="Roll back a failed or partially-completed onboarding",
+    description=(
+        "Hard delete — only legal from FAILED or PARTIALLY_COMPLETE. "
+        "Never use on COMPLETED users; that's offboard()."
+    ),
+)
+async def rollback_onboarding(
+    user_id: UUID,
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(get_admin_user),
+    provisioning: UserProvisioningService = Depends(get_provisioning_service),
+) -> None:
+    result = await db.execute(select(OnboardedUser).where(OnboardedUser.id == user_id))
+    record = result.scalar_one_or_none()
+    if record is None:
+        raise HTTPException(status_code=404, detail="Unknown user_id")
+    if record.job_status not in (OnboardJobStatus.FAILED, OnboardJobStatus.PARTIALLY_COMPLETE):
+        raise HTTPException(
+            status_code=409,
+            detail=(
+                f"Rollback only allowed from FAILED or PARTIALLY_COMPLETE "
+                f"(current: {record.job_status.value})"
+            ),
+        )
+
+    snapshot = {
+        "email": record.email,
+        "department": record.department,
+        "job_status": record.job_status.value,
+    }
+    if record.external_id is not None:
+        await provisioning.delete_user(user_id)
+
+    await hard_delete_onboarding_record(db, user_id)
+    await write_audit_log(
+        db,
+        actor=current_user.email,
+        action="user.onboarding_rollback",
+        target_type="onboarded_user",
+        target_id=str(user_id),
+        payload=snapshot,
+    )
+    await db.commit()
+
+
 @router.get(
     "",
     response_model=list[OnboardedUserListItem],
@@ -197,26 +295,43 @@ async def list_onboarded_users(
     return list(result.scalars().all())
 
 
+class RetryRequest(BaseModel):
+    rotate_password: bool = True
+
+
 @router.post(
     "/jobs/{job_id}/retry",
     status_code=status.HTTP_202_ACCEPTED,
     response_model=OnboardJobStarted,
-    summary="Retry a failed onboarding job",
+    summary="Retry a failed or partially-completed onboarding job",
+    description=(
+        "FAILED (no directory account exists) triggers a full re-run from "
+        "scratch. PARTIALLY_COMPLETE (directory account exists, "
+        "notifications unconfirmed) resumes from notification delivery "
+        "only — set rotate_password=false to resend without invalidating "
+        "a password that may have already reached the user."
+    ),
 )
 async def retry_onboarding(
     job_id: str,
+    body: RetryRequest,
     background_tasks: BackgroundTasks,
     db: AsyncSession = Depends(get_db),
     current_user: User = Depends(get_admin_user),
 ) -> OnboardJobStarted:
-    result = await db.execute(select(OnboardedUser).where(OnboardedUser.job_id == job_id))
+    result = await db.execute(
+        select(OnboardedUser).where(OnboardedUser.job_id == job_id).with_for_update()
+    )
     record = result.scalar_one_or_none()
     if record is None:
         raise HTTPException(status_code=404, detail="Unknown job_id")
-    if record.job_status != OnboardJobStatus.FAILED:
+    if record.job_status not in (OnboardJobStatus.FAILED, OnboardJobStatus.PARTIALLY_COMPLETE):
         raise HTTPException(
             status_code=409,
-            detail=f"Only FAILED jobs can be retried (current: {record.job_status.value})",
+            detail=(
+                f"Only FAILED or PARTIALLY_COMPLETE jobs can be retried "
+                f"(current: {record.job_status.value})"
+            ),
         )
 
     new_job = create_job(initial_status="PENDING")
@@ -245,6 +360,7 @@ async def retry_onboarding(
             new_job.job_id,
             user_id=record.id,
             actor_email=current_user.email,
+            rotate_password=body.rotate_password,
         )
 
     return OnboardJobStarted(job_id=new_job.job_id, status=new_job.status)

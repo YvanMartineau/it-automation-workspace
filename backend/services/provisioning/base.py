@@ -54,3 +54,7 @@ class UserProvisioningService(ABC):
         """Offboard — always a soft-delete, never a hard delete. Idempotent:
         calling this on an already-offboarded user returns the existing
         record unchanged, never re-stamping offboarded_at to 'now'."""
+
+    @abstractmethod
+    async def delete_user(self, user_id: UUID) -> None:
+        """Hard delete — for onboarding rollback only, never for offboarding."""

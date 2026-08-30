@@ -79,3 +79,17 @@ class LocalDBProvisioningService(UserProvisioningService):
             provisioning_source=record.provisioning_source.value,
             offboarded_at=record.offboarded_at,
         )
+
+    async def delete_user(self, user_id: UUID) -> None:
+        """
+        No-op by design, same rationale as set_password: in local mode
+        Postgres IS the directory, so there's no separate external account
+        to remove. The router's rollback() only calls this when
+        external_id is not None, which is never true for this provider —
+        hard_delete_onboarding_record() removing the Postgres row is the
+        entire rollback in local mode.
+        """
+        logger.debug(
+            "delete_user for local provisioning (user_id=%s) — nothing external to remove.",
+            user_id,
+        )

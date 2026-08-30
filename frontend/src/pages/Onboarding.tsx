@@ -68,6 +68,14 @@ const COLUMN_CONFIG: ColumnConfig[] = [
     isActive: true,
   },
   {
+    id: "PARTIALLY_COMPLETE",
+    label: "Teilweise abgeschlossen",
+    description: "Konto erstellt, Benachrichtigung unbestätigt",
+    accent: "bg-amber-500",
+    icon: <AlertTriangle className="h-3.5 w-3.5" />,
+    isActive: true,
+  },
+  {
     id: "COMPLETED",
     label: "Abgeschlossen",
     description: "Erfolgreich onboarded",
@@ -309,13 +317,21 @@ export default function OnboardingPage(): JSX.Element {
     });
   };
 
-  // Pipeline stats
   const stats = useMemo(() => {
-    if (!records) return { active: 0, inProgress: 0, completed: 0, failed: 0, offboarded: 0 };
+    if (!records) {
+      return { active: 0, inProgress: 0, partiallyComplete: 0, completed: 0, failed: 0, offboarded: 0 };
+    }
     return {
-      active: records.filter((r) => r.workflow_status !== "COMPLETED" && r.workflow_status !== "FAILED" && r.status !== "offboarded").length,
-      inProgress: records.filter((r) =>
-        ["AD_CREATING", "EMAIL_SENDING", "JIRA_CREATING"].includes(r.workflow_status) && r.status !== "offboarded"
+      active: records.filter(
+        (r) => r.workflow_status !== "COMPLETED" && r.workflow_status !== "FAILED" && r.status !== "offboarded"
+      ).length,
+      inProgress: records.filter(
+        (r) =>
+          ["AD_CREATING", "EMAIL_SENDING", "JIRA_CREATING"].includes(r.workflow_status) &&
+          r.status !== "offboarded"
+      ).length,
+      partiallyComplete: records.filter(
+        (r) => r.workflow_status === "PARTIALLY_COMPLETE" && r.status !== "offboarded"
       ).length,
       completed: records.filter((r) => r.workflow_status === "COMPLETED" && r.status !== "offboarded").length,
       failed: records.filter((r) => r.workflow_status === "FAILED" && r.status !== "offboarded").length,
@@ -355,12 +371,10 @@ export default function OnboardingPage(): JSX.Element {
 
   return (
     <div className="space-y-8">
-      {/* SSE Job Stream Subscribers */}
       {watchedJobIds.map((jobId) => (
         <OnboardingJobStreamSubscriber key={jobId} jobId={jobId} active />
       ))}
 
-      {/* Page Header */}
       <header className="flex flex-col sm:flex-row sm:items-end sm:justify-between gap-4">
         <div>
           <h1 className="text-2xl font-bold tracking-tight text-gradient sm:text-3xl">
@@ -373,8 +387,7 @@ export default function OnboardingPage(): JSX.Element {
         <OnboardingFormDialog />
       </header>
 
-      {/* Pipeline Stats Hero */}
-      <section className="grid grid-cols-2 lg:grid-cols-5 gap-4" aria-label="Pipeline-Statistiken">
+      <section className="grid grid-cols-2 lg:grid-cols-3 xl:grid-cols-6 gap-4" aria-label="Pipeline-Statistiken">
         <PipelineStat
           label="Aktive Vorgänge"
           value={stats.active}
@@ -386,6 +399,12 @@ export default function OnboardingPage(): JSX.Element {
           value={stats.inProgress}
           icon={<Clock className="h-4 w-4" />}
           color="warning"
+        />
+        <PipelineStat
+          label="Teilweise abgeschlossen"
+          value={stats.partiallyComplete}
+          icon={<AlertTriangle className="h-4 w-4" />}
+          color={stats.partiallyComplete > 0 ? "warning" : "muted"}
         />
         <PipelineStat
           label="Abgeschlossen"
@@ -408,94 +427,93 @@ export default function OnboardingPage(): JSX.Element {
         />
       </section>
 
-      {/* Kanban Board */}
       {/* Active Pipeline */}
-<section aria-label="Aktive Onboarding-Pipeline">
-  <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-5 gap-4">
-    {COLUMN_CONFIG.filter((column) => column.isActive).map((column) => {
-      const columnRecords =
-        records?.filter((r) => r.workflow_status === column.id && r.status !== "offboarded") || [];
+      <section aria-label="Aktive Onboarding-Pipeline">
+        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-5 gap-4">
+          {COLUMN_CONFIG.filter((column) => column.isActive).map((column) => {
+            const columnRecords =
+              records?.filter((r) => r.workflow_status === column.id && r.status !== "offboarded") || [];
 
-      return (
-        <div key={column.id} className="flex flex-col gap-3 min-w-0">
-          <ColumnHeader
-            config={column}
-            count={columnRecords.length}
-            isCollapsed={false}
-            onToggleCollapse={() => {}}
-            isCollapsible={false}
-          />
-          <div className="flex flex-col gap-3">
-            {columnRecords.length === 0 ? (
-              <EmptyColumnState />
-            ) : (
-              columnRecords.map((record) => (
-                <OnboardingCard key={record.user_id} record={record} />
-              ))
-            )}
-          </div>
+            return (
+              <div key={column.id} className="flex flex-col gap-3 min-w-0">
+                <ColumnHeader
+                  config={column}
+                  count={columnRecords.length}
+                  isCollapsed={false}
+                  onToggleCollapse={() => {}}
+                  isCollapsible={false}
+                />
+                <div className="flex flex-col gap-3">
+                  {columnRecords.length === 0 ? (
+                    <EmptyColumnState />
+                  ) : (
+                    columnRecords.map((record) => (
+                      <OnboardingCard key={record.user_id} record={record} />
+                    ))
+                  )}
+                </div>
+              </div>
+            );
+          })}
         </div>
-      );
-    })}
-  </div>
-</section>
+      </section>
 
-{/* Completed — pulled out of the kanban row, own dense grid */}
-{(() => {
-  const completedRecords =
-    records?.filter((r) => r.workflow_status === "COMPLETED" && r.status !== "offboarded") || [];
-  const isCollapsed = collapsedColumns.has("COMPLETED");
+      {/* Completed — pulled out of the kanban row, own dense grid */}
+      {(() => {
+        const completedRecords =
+          records?.filter((r) => r.workflow_status === "COMPLETED" && r.status !== "offboarded") || [];
+        const isCollapsed = collapsedColumns.has("COMPLETED");
 
-  if (completedRecords.length === 0) return null;
+        if (completedRecords.length === 0) return null;
 
-  return (
-    <section className="space-y-4" aria-label="Abgeschlossene Onboarding-Vorgänge">
-      <button
-        onClick={() => toggleColumn("COMPLETED")}
-        className={cn(
-          "flex items-center gap-3 w-full rounded-xl border border-border/60 bg-card px-4 py-3",
-          "shadow-sm transition-all duration-200",
-          "hover:bg-accent/30 hover:border-border/80"
-        )}
-      >
-        <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-lg bg-success/10 ring-1 ring-success/15">
-          <CheckCircle2 className="h-4 w-4 text-success" aria-hidden="true" />
-        </div>
-        <div className="flex-1 text-left">
-          <h3 className="text-sm font-semibold text-foreground/80">Abgeschlossene Vorgänge</h3>
-          <p className="text-[11px] text-muted-foreground/50">
-            {COLUMN_CONFIG.find((column) => column.id === "COMPLETED")?.description}
-          </p>
-        </div>
-        <div className="flex items-center gap-2">
-          <span className="text-[11px] text-muted-foreground/40 font-medium tabular-nums">
-            {completedRecords.length}
-          </span>
-          <ChevronDown
-            className={cn(
-              "h-4 w-4 text-muted-foreground/40 transition-transform duration-300",
-              !isCollapsed && "rotate-180"
-            )}
-            aria-hidden="true"
-          />
-        </div>
-      </button>
+        return (
+          <section className="space-y-4" aria-label="Abgeschlossene Onboarding-Vorgänge">
+            <button
+              onClick={() => toggleColumn("COMPLETED")}
+              className={cn(
+                "flex items-center gap-3 w-full rounded-xl border border-border/60 bg-card px-4 py-3",
+                "shadow-sm transition-all duration-200",
+                "hover:bg-accent/30 hover:border-border/80"
+              )}
+            >
+              <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-lg bg-success/10 ring-1 ring-success/15">
+                <CheckCircle2 className="h-4 w-4 text-success" aria-hidden="true" />
+              </div>
+              <div className="flex-1 text-left">
+                <h3 className="text-sm font-semibold text-foreground/80">Abgeschlossene Vorgänge</h3>
+                <p className="text-[11px] text-muted-foreground/50">
+                  {COLUMN_CONFIG.find((column) => column.id === "COMPLETED")?.description}
+                </p>
+              </div>
+              <div className="flex items-center gap-2">
+                <span className="text-[11px] text-muted-foreground/40 font-medium tabular-nums">
+                  {completedRecords.length}
+                </span>
+                <ChevronDown
+                  className={cn(
+                    "h-4 w-4 text-muted-foreground/40 transition-transform duration-300",
+                    !isCollapsed && "rotate-180"
+                  )}
+                  aria-hidden="true"
+                />
+              </div>
+            </button>
 
-      <div
-        className={cn(
-          "overflow-hidden transition-all duration-500 ease-premium",
-          !isCollapsed ? "max-h-[3000px] opacity-100" : "max-h-0 opacity-0"
-        )}
-      >
-        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-3">
-          {completedRecords.map((record) => (
-            <OnboardingCard key={record.user_id} record={record} compact />
-          ))}
-        </div>
-      </div>
-    </section>
-  );
-})()}
+            <div
+              className={cn(
+                "overflow-hidden transition-all duration-500 ease-premium",
+                !isCollapsed ? "max-h-[3000px] opacity-100" : "max-h-0 opacity-0"
+              )}
+            >
+              <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-3">
+                {completedRecords.map((record) => (
+                  <OnboardingCard key={record.user_id} record={record} compact />
+                ))}
+              </div>
+            </div>
+          </section>
+        );
+      })()}
 
       {/* Offboarding Section */}
       {offboardedRecords.length > 0 && (

@@ -221,3 +221,34 @@ class LdapProvisioningService(UserProvisioningService):
             return await loop.run_in_executor(None, self._deactivate_user_sync, user_id)
         except LDAPException as err:
             raise ExternalServiceError(f"LDAP deactivation failed: {err}") from err
+
+    def _delete_user_sync(self, user_id: UUID) -> None:
+        conn = self._connect()
+        try:
+            conn.search(
+                settings.LDAP_USERS_OU,
+                f"(employeeNumber={user_id})",
+                search_scope=SUBTREE,
+                attributes=["cn"],
+            )
+            if not conn.entries:
+                return  # already gone — delete is idempotent
+            user_dn = conn.entries[0].entry_dn
+            conn.search(
+                settings.LDAP_GROUPS_OU,
+                f"(member={user_dn})",
+                search_scope=SUBTREE,
+                attributes=["member"],
+            )
+            for grp in conn.entries:
+                conn.modify(grp.entry_dn, {"member": [(MODIFY_DELETE, [user_dn])]})
+            conn.delete(user_dn)
+        finally:
+            conn.unbind()
+
+    async def delete_user(self, user_id: UUID) -> None:
+        loop = asyncio.get_running_loop()
+        try:
+            await loop.run_in_executor(None, self._delete_user_sync, user_id)
+        except LDAPException as err:
+            raise ExternalServiceError(f"LDAP delete failed: {err}") from err
