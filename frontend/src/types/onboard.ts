@@ -1,6 +1,6 @@
 // src/types/onboard.ts (Snippet to add) //USELESS WAS REPLACE BY onboarding.ts
 export type OnboardingSource = 'local_db' | 'entra_id';
-export type OnboardingStatus = 'PENDING' | 'AD_CREATING' | 'EMAIL_SENDING' | 'JIRA_CREATING' | 'COMPLETED' | 'FAILED';
+export type OnboardingStatus = 'PENDING' | 'AD_CREATING' | 'EMAIL_SENDING' | 'JIRA_CREATING' | 'PARTIALLY_COMPLETE' | 'COMPLETED' | 'FAILED';
 
 export interface OnboardingRecord {
   id: string;

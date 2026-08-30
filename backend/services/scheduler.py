@@ -12,6 +12,7 @@ from settings import get_settings
 
 from services import scanner
 from services.report_service import generate_and_send_report_task
+from services.onboarding_sweeper import sweep_stale_onboarding_jobs
 
 logger = logging.getLogger(__name__)
 
@@ -98,6 +99,10 @@ def start_scheduler() -> None:
         coalesce=True,
         replace_existing=True,
     )
+
+    # 3. Onboarding Sweeper — interval < ONBOARDING_STALE_TIMEOUT_MINUTES (2),
+    # so worst-case detection lag stays under ~3 minutes rather than ~7.
+    _scheduler.add_job(sweep_stale_onboarding_jobs, "interval", minutes=1, id="onboarding_sweeper")
 
     _scheduler.start()
     logger.info(

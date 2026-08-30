@@ -53,6 +53,16 @@ async def upsert_onboarding_record(
             external_id=provisioned.external_id,
         )
         db.add(record)
+    else:
+        # The pending row already exists (route handler creates it
+        # synchronously before the background task starts) — this is
+        # normally an UPDATE, not an INSERT. external_id in particular
+        # MUST be synced here: this call fires immediately after
+        # create_user() succeeds, specifically so a retry can tell the
+        # directory account already exists. Miss this and a retry has
+        # no way to know that, re-runs create_user(), and collides with
+        # its own earlier success.
+        record.external_id = provisioned.external_id
 
     record.job_id = job_id
     record.job_status = job_status
@@ -117,4 +127,13 @@ async def create_pending_onboarding_record(
     except IntegrityError as err:
         await db.rollback()
         raise ConflictError(f"A user with email '{email}' already exists") from err
+    return record
+
+
+async def hard_delete_onboarding_record(db: AsyncSession, user_id: UUID) -> OnboardedUser | None:
+    result = await db.execute(select(OnboardedUser).where(OnboardedUser.id == user_id))
+    record = result.scalar_one_or_none()
+    if record is not None:
+        await db.delete(record)
+        await db.flush()
     return record

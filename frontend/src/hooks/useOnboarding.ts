@@ -27,11 +27,6 @@ export const useOnboardingList = () => {
 };
 
 // --- Watched-job-ids: a client-only cache slot, not a server query ---
-// Holds only job_ids we ourselves just created/retried THIS session.
-// That's the one case where the in-memory job_store on the backend is
-// guaranteed to actually have the job — anything discovered from the
-// list endpoint on page load might predate a server restart and 404
-// forever, which is exactly what was flooding the console.
 const WATCHED_JOBS_KEY = ["onboard", "watchedJobIds"] as const;
 
 function addWatchedJob(queryClient: QueryClient, jobId: string) {
@@ -43,6 +38,8 @@ function addWatchedJob(queryClient: QueryClient, jobId: string) {
 function removeWatchedJob(queryClient: QueryClient, jobId: string) {
   queryClient.setQueryData<string[]>(WATCHED_JOBS_KEY, (prev = []) => prev.filter((id) => id !== jobId));
 }
+
+const TERMINAL_STATUSES = new Set(["COMPLETED", "FAILED", "PARTIALLY_COMPLETE"]);
 
 export function useWatchedJobIds() {
   return useQuery<string[]>({
@@ -73,7 +70,7 @@ export const useCreateOnboarding = () => {
         status: "active",
         workflow_status: "PENDING",
         provisioning_source: "local",
-        requested_by: "Current User", // Ideally from auth store
+        requested_by: "Current User",
         error_message: null,
         created_at: new Date().toISOString(),
         offboarded_at: null,
@@ -96,15 +93,28 @@ export const useCreateOnboarding = () => {
   });
 };
 
+interface RetryVariables {
+  jobId: string;
+  /**
+   * Only meaningful for a PARTIALLY_COMPLETE resume. Ignored server-side
+   * for a FAILED full re-run (that path always issues a fresh password
+   * since no account exists yet to have a stale one). Defaults to true
+   * so a FAILED retry needs no special-casing on the caller's part.
+   */
+  rotatePassword?: boolean;
+}
+
 export const useRetryOnboarding = () => {
   const queryClient = useQueryClient();
 
   return useMutation({
-    mutationFn: (jobId: string) =>
-      api.post<OnboardJobStarted>(`/onboard/jobs/${jobId}/retry`).then((res) => res.data),
+    mutationFn: ({ jobId, rotatePassword = true }: RetryVariables) =>
+      api
+        .post<OnboardJobStarted>(`/onboard/jobs/${jobId}/retry`, { rotate_password: rotatePassword })
+        .then((res) => res.data),
 
     onSuccess: (data) => {
-      toast.info("Onboarding-Schritt wird erneut ausgeführt...");
+      toast.info("Onboarding-Vorgang wird erneut ausgeführt…");
       addWatchedJob(queryClient, data.job_id);
       queryClient.invalidateQueries({ queryKey: ["onboard", "list"] });
     },
@@ -114,6 +124,38 @@ export const useRetryOnboarding = () => {
         toast.error("Dieser Vorgang kann nicht wiederholt werden (bereits abgeschlossen oder läuft).");
       } else {
         toast.error("Fehler beim Wiederholen des Vorgangs.");
+      }
+    },
+  });
+};
+
+/**
+ * Hard delete — only legal server-side from FAILED or PARTIALLY_COMPLETE.
+ * Deliberately a separate hook from useOffboardUser: rollback removes a
+ * record that never became a real employee; offboard soft-deletes one
+ * that did. Conflating the two in the UI is exactly what the backend's
+ * state machine was redesigned to prevent.
+ */
+export const useRollbackOnboarding = () => {
+  const queryClient = useQueryClient();
+
+  return useMutation({
+    mutationFn: (userId: string) => api.post(`/onboard/${userId}/rollback`).then((res) => res.data),
+
+    onSuccess: () => {
+      toast.success("Vorgang wurde vollständig entfernt.");
+      queryClient.invalidateQueries({ queryKey: ["onboard", "list"] });
+    },
+
+    onError: (error: unknown) => {
+      if (error instanceof AxiosError && error.response?.status === 409) {
+        toast.error(
+          "Rollback nicht möglich — Vorgang ist bereits abgeschlossen. Nutzen Sie stattdessen Offboarding."
+        );
+      } else if (error instanceof AxiosError && error.response?.status === 404) {
+        toast.error("Nutzer wurde nicht gefunden.");
+      } else {
+        toast.error("Fehler beim Zurücksetzen des Vorgangs.");
       }
     },
   });
@@ -133,6 +175,8 @@ export const useOffboardUser = () => {
     onError: (error: unknown) => {
       if (error instanceof AxiosError && error.response?.status === 404) {
         toast.error("Nutzer wurde nicht gefunden.");
+      } else if (error instanceof AxiosError && error.response?.status === 409) {
+        toast.error("Offboarding erfordert einen vollständig abgeschlossenen Onboarding-Vorgang.");
       } else {
         toast.error("Fehler beim Offboarding.");
       }
@@ -145,15 +189,6 @@ interface OnboardingJobStreamEvent {
   data?: Record<string, unknown>;
 }
 
-/**
- * Subscribes to GET /onboard/jobs/{jobId}/stream (SSE) and patches the
- * matching record's workflow_status/error_message into the
- * ["onboard","list"] cache as events arrive. Removes jobId from the
- * watched list on a terminal status OR a 404 (job no longer exists in
- * the backend's in-memory store — most likely a server restart since
- * this job was created), so a dead job_id is never retried on the next
- * mount.
- */
 export function useOnboardingJobStream(jobId: string | null | undefined, active: boolean) {
   const queryClient = useQueryClient();
   const activeRef = useRef(active);
@@ -176,7 +211,7 @@ export function useOnboardingJobStream(jobId: string | null | undefined, active:
             : r
         ) ?? prev
       );
-      if (event.status === "COMPLETED" || event.status === "FAILED") {
+      if (TERMINAL_STATUSES.has(event.status)) {
         removeWatchedJob(queryClient, jobId);
         queryClient.invalidateQueries({ queryKey: ["onboard", "list"] });
       }
@@ -192,8 +227,6 @@ export function useOnboardingJobStream(jobId: string | null | undefined, active:
         });
 
         if (response.status === 404) {
-          // Job doesn't exist server-side (stale / pre-restart) — stop
-          // trying on future mounts instead of repeating this forever.
           if (jobId) removeWatchedJob(queryClient, jobId);
           return;
         }
@@ -218,7 +251,7 @@ export function useOnboardingJobStream(jobId: string | null | undefined, active:
             try {
               const parsed: OnboardingJobStreamEvent = JSON.parse(dataLine.replace(/^data:\s*/, ""));
               applyEvent(parsed);
-              if (parsed.status === "COMPLETED" || parsed.status === "FAILED") return;
+              if (TERMINAL_STATUSES.has(parsed.status)) return;
             } catch {
               // skip malformed chunk rather than crash the reader
             }

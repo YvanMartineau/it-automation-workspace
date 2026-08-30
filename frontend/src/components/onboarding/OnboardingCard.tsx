@@ -1,10 +1,9 @@
 // src/components/onboarding/OnboardingCard.tsx — Premium Edition v2
-// Features: Status-change animation, expandable completed cards
-
 import { useState, useEffect, useRef } from "react";
 import { Card, CardContent, CardHeader } from "#/components/ui/card";
 import { Badge } from "#/components/ui/badge";
 import { Button } from "#/components/ui/button";
+import { Checkbox } from "#/components/ui/checkbox";
 import {
   Dialog,
   DialogContent,
@@ -23,6 +22,8 @@ import {
   ChevronDown,
   ChevronUp,
   RotateCcw,
+  Send,
+  Trash2,
   Mail,
   FolderOpen,
   Ticket,
@@ -33,7 +34,7 @@ import {
   ArrowRight,
 } from "lucide-react";
 import type { OnboardedUserListItem, OnboardingWorkflowStatus } from "#/types/onboarding";
-import { useRetryOnboarding, useOffboardUser } from "#/hooks/useOnboarding";
+import { useRetryOnboarding, useOffboardUser, useRollbackOnboarding } from "#/hooks/useOnboarding";
 import { toast } from "sonner";
 import { cn } from "#/lib/utils";
 
@@ -93,7 +94,14 @@ const STEPS: StepConfig[] = [
 
 const statusConfig: Record<
   OnboardingWorkflowStatus,
-  { gradient: string; icon: React.ReactNode; label: string; badgeClass: string; pulseColor: string; ringColor: string }
+  {
+    gradient: string;
+    icon: React.ReactNode;
+    label: string;
+    badgeClass: string;
+    pulseColor: string;
+    ringColor: string;
+  }
 > = {
   PENDING: {
     gradient: "from-muted-foreground/30 to-muted-foreground/10",
@@ -127,6 +135,14 @@ const statusConfig: Record<
     pulseColor: "hsl(35 90% 48% / 0.08)",
     ringColor: "hsl(35 90% 48% / 0.30)",
   },
+  PARTIALLY_COMPLETE: {
+    gradient: "from-amber-500/60 to-amber-500/15",
+    icon: <AlertTriangle className="h-3.5 w-3.5" />,
+    label: "Teilweise abgeschlossen",
+    badgeClass: "bg-amber-500/10 text-amber-600 border-amber-500/25",
+    pulseColor: "hsl(38 92% 50% / 0.08)",
+    ringColor: "hsl(38 92% 50% / 0.30)",
+  },
   COMPLETED: {
     gradient: "from-success/60 to-success/15",
     icon: <CheckCircle2 className="h-3.5 w-3.5" />,
@@ -152,18 +168,22 @@ const statusConfig: Record<
 function generateSimulationLog(record: OnboardedUserListItem): string[] {
   const logs: string[] = [];
   const name = `${record.first_name} ${record.last_name}`;
+  const reachedOrPast = (statuses: OnboardingWorkflowStatus[]) => statuses.includes(record.workflow_status);
 
   if (record.workflow_status !== "PENDING") {
     logs.push(`POST https://n8n.instance.com/webhook/onboard-start\nPayload: { "first_name": "${record.first_name}", "email": "${record.email}", "department": "${record.department}" }`);
   }
-  if (["AD_CREATING", "EMAIL_SENDING", "JIRA_CREATING", "COMPLETED"].includes(record.workflow_status)) {
+  if (reachedOrPast(["AD_CREATING", "EMAIL_SENDING", "JIRA_CREATING", "PARTIALLY_COMPLETE", "COMPLETED"])) {
     logs.push(`POST https://n8n.instance.com/webhook/ad-create\nPayload: { "user": "${name}", "ou": "${record.department}", "source": "${record.provisioning_source}" }`);
   }
-  if (["EMAIL_SENDING", "JIRA_CREATING", "COMPLETED"].includes(record.workflow_status)) {
+  if (reachedOrPast(["EMAIL_SENDING", "JIRA_CREATING", "PARTIALLY_COMPLETE", "COMPLETED"])) {
     logs.push(`POST https://n8n.instance.com/webhook/email-send\nPayload: { "to": "${record.email}", "template": "welcome" }`);
   }
-  if (["JIRA_CREATING", "COMPLETED"].includes(record.workflow_status)) {
+  if (reachedOrPast(["JIRA_CREATING", "COMPLETED"])) {
     logs.push(`POST https://n8n.instance.com/webhook/jira-ticket\nPayload: { "summary": "IT Setup for ${name}", "priority": "High" }`);
+  }
+  if (record.workflow_status === "PARTIALLY_COMPLETE") {
+    logs.push(`\n⚠ Konto existiert im Verzeichnis — keine Bestätigung für E-Mail/Jira erhalten.`);
   }
   if (record.workflow_status === "FAILED" && record.error_message) {
     logs.push(`\n❌ ERROR: ${record.error_message}`);
@@ -213,7 +233,6 @@ function CompactCard({ record }: { record: OnboardedUserListItem }): JSX.Element
 
   return (
     <div className="flex flex-col gap-3">
-      {/* Compact Row — Always visible */}
       <button
         onClick={() => setIsExpanded(!isExpanded)}
         className={cn(
@@ -228,7 +247,6 @@ function CompactCard({ record }: { record: OnboardedUserListItem }): JSX.Element
         style={isAnimating ? { "--pulse-color": config.pulseColor, "--ring-color": config.ringColor } as React.CSSProperties : undefined}
         aria-expanded={isExpanded}
       >
-        {/* Status change glow ring */}
         {isAnimating && (
           <span
             className="absolute inset-0 rounded-xl animate-status-ring pointer-events-none"
@@ -237,7 +255,6 @@ function CompactCard({ record }: { record: OnboardedUserListItem }): JSX.Element
           />
         )}
 
-        {/* Mini avatar */}
         <div
           className={cn(
             "flex h-8 w-8 shrink-0 items-center justify-center rounded-lg",
@@ -270,7 +287,6 @@ function CompactCard({ record }: { record: OnboardedUserListItem }): JSX.Element
           )}
         </div>
 
-        {/* Expand indicator */}
         <ChevronDown
           className={cn(
             "h-3.5 w-3.5 text-muted-foreground/30 shrink-0 transition-transform duration-300",
@@ -279,7 +295,6 @@ function CompactCard({ record }: { record: OnboardedUserListItem }): JSX.Element
         />
       </button>
 
-      {/* Expanded Detail View */}
       <div
         className={cn(
           "overflow-hidden transition-all duration-500 ease-premium",
@@ -287,7 +302,6 @@ function CompactCard({ record }: { record: OnboardedUserListItem }): JSX.Element
         )}
       >
         <div className="rounded-xl border border-border/60 bg-card p-4 shadow-sm space-y-4">
-          {/* Full Timeline — All steps completed */}
           <div className="space-y-0">
             <p className="text-[10px] font-semibold uppercase tracking-wider text-muted-foreground/50 mb-2">
               Onboarding-Verlauf
@@ -340,7 +354,6 @@ function CompactCard({ record }: { record: OnboardedUserListItem }): JSX.Element
             })}
           </div>
 
-          {/* Metadata Grid */}
           <div className="grid grid-cols-2 gap-3 pt-2 border-t border-border/40">
             <MetadataItem
               icon={<Calendar className="h-3 w-3" />}
@@ -369,7 +382,6 @@ function CompactCard({ record }: { record: OnboardedUserListItem }): JSX.Element
             />
           </div>
 
-          {/* Simulation Log */}
           <SimulationLogPanel record={record} />
         </div>
       </div>
@@ -378,7 +390,7 @@ function CompactCard({ record }: { record: OnboardedUserListItem }): JSX.Element
 }
 
 // ---------------------------------------------------------------------------
-// Metadata Item (for expanded completed cards)
+// Metadata Item
 // ---------------------------------------------------------------------------
 
 function MetadataItem({
@@ -406,7 +418,7 @@ function MetadataItem({
 }
 
 // ---------------------------------------------------------------------------
-// Simulation Log Panel (shared)
+// Simulation Log Panel
 // ---------------------------------------------------------------------------
 
 function SimulationLogPanel({ record }: { record: OnboardedUserListItem }): JSX.Element {
@@ -447,20 +459,42 @@ function SimulationLogPanel({ record }: { record: OnboardedUserListItem }): JSX.
 function FullCard({ record }: { record: OnboardedUserListItem }): JSX.Element {
   const retryMutation = useRetryOnboarding();
   const offboardMutation = useOffboardUser();
-//  const [showLogs, setShowLogs] = useState(false);
+  const rollbackMutation = useRollbackOnboarding();
   const [confirmOpen, setConfirmOpen] = useState(false);
+  const [rollbackConfirmOpen, setRollbackConfirmOpen] = useState(false);
+  const [rotatePassword, setRotatePassword] = useState(false);
   const isAnimating = useStatusAnimation(record.workflow_status);
 
   const config = statusConfig[record.workflow_status];
   const isOffboarded = record.status === "offboarded";
   const canOffboard = !isOffboarded && record.workflow_status === "COMPLETED";
   const isFailed = record.workflow_status === "FAILED";
+  const isPartial = record.workflow_status === "PARTIALLY_COMPLETE";
+  const canRetry = (isFailed || isPartial) && !isOffboarded;
+  const canRollback = (isFailed || isPartial) && !isOffboarded;
 
   const currentStepIndex = STEPS.findIndex((s) => s.key === record.workflow_status);
-  const displaySteps = isFailed ? STEPS : STEPS.slice(0, currentStepIndex + 1);
+  // PARTIALLY_COMPLETE isn't itself a STEPS entry — the directory account is
+  // confirmed to exist (AD_CREATING succeeded), but what happened after
+  // that point is unconfirmed, not failed. Anchor the timeline at
+  // EMAIL_SENDING rather than pretending to know more than we do.
+  const effectiveStepIndex = isPartial ? STEPS.findIndex((s) => s.key === "EMAIL_SENDING") : currentStepIndex;
+  const displaySteps = isFailed || isPartial ? STEPS : STEPS.slice(0, currentStepIndex + 1);
 
   const handleOffboardConfirm = () => {
     offboardMutation.mutate(record.user_id, { onSuccess: () => setConfirmOpen(false) });
+  };
+
+  const handleRollbackConfirm = () => {
+    rollbackMutation.mutate(record.user_id, { onSuccess: () => setRollbackConfirmOpen(false) });
+  };
+
+  const handleRetry = () => {
+    if (!record.job_id) {
+      toast.error("Fehler: job_id fehlt. Bitte Backend-Schema prüfen.");
+      return;
+    }
+    retryMutation.mutate({ jobId: record.job_id, rotatePassword: isPartial ? rotatePassword : true });
   };
 
   return (
@@ -470,11 +504,11 @@ function FullCard({ record }: { record: OnboardedUserListItem }): JSX.Element {
         "shadow-sm transition-all duration-300 ease-premium",
         "hover:shadow-card-hover hover:-translate-y-0.5",
         isFailed && "border-l-[3px] border-l-danger",
+        isPartial && "border-l-[3px] border-l-amber-500",
         isAnimating && "animate-status-pulse"
       )}
       style={isAnimating ? { "--pulse-color": config.pulseColor, "--ring-color": config.ringColor } as React.CSSProperties : undefined}
     >
-      {/* Status change glow ring */}
       {isAnimating && (
         <span
           className="absolute inset-0 rounded-xl animate-status-ring pointer-events-none z-20"
@@ -483,8 +517,7 @@ function FullCard({ record }: { record: OnboardedUserListItem }): JSX.Element {
         />
       )}
 
-      {/* Gradient accent for active stages */}
-      {!isFailed && (
+      {!isFailed && !isPartial && (
         <div
           className={cn("absolute left-0 top-0 bottom-0 w-[3px] bg-gradient-to-b", config.gradient)}
           aria-hidden="true"
@@ -533,9 +566,9 @@ function FullCard({ record }: { record: OnboardedUserListItem }): JSX.Element {
         {/* Step Timeline */}
         <div className="space-y-0">
           {displaySteps.map((step, idx) => {
-            const isCompleted = idx < currentStepIndex && !isFailed;
-            const isCurrent = idx === currentStepIndex && !isFailed;
-            const isFailedStep = isFailed && idx === currentStepIndex;
+            const isCompleted = idx < effectiveStepIndex && !isFailed && !isPartial;
+            const isCurrent = idx === effectiveStepIndex && !isFailed && !isPartial;
+            const isUnconfirmedStep = isPartial && idx >= effectiveStepIndex;
             const isLast = idx === displaySteps.length - 1;
 
             return (
@@ -557,15 +590,15 @@ function FullCard({ record }: { record: OnboardedUserListItem }): JSX.Element {
                       ? "bg-success border-success text-white"
                       : isCurrent
                         ? "bg-card border-primary text-primary"
-                        : isFailedStep
-                          ? "bg-danger border-danger text-white"
+                        : isUnconfirmedStep
+                          ? "bg-amber-500/15 border-amber-500 text-amber-600"
                           : "bg-card border-muted-foreground/20 text-muted-foreground/40"
                   )}
                 >
                   {isCompleted ? (
                     <CheckCircle2 className="h-2.5 w-2.5" />
-                  ) : isFailedStep ? (
-                    <XCircle className="h-2.5 w-2.5" />
+                  ) : isUnconfirmedStep ? (
+                    <AlertTriangle className="h-2.5 w-2.5" />
                   ) : (
                     <div className="h-1.5 w-1.5 rounded-full bg-current" />
                   )}
@@ -578,8 +611,8 @@ function FullCard({ record }: { record: OnboardedUserListItem }): JSX.Element {
                       ? "text-success font-medium"
                       : isCurrent
                         ? "text-foreground font-semibold"
-                        : isFailedStep
-                          ? "text-danger font-semibold"
+                        : isUnconfirmedStep
+                          ? "text-amber-600 font-medium"
                           : "text-muted-foreground/40"
                   )}
                 >
@@ -590,30 +623,98 @@ function FullCard({ record }: { record: OnboardedUserListItem }): JSX.Element {
           })}
         </div>
 
-        {/* Simulation Log */}
+        {(isFailed || isPartial) && record.error_message && (
+          <p
+            className={cn(
+              "text-[11px] rounded-lg px-2.5 py-2 leading-relaxed border",
+              isFailed
+                ? "text-danger bg-danger/8 border-danger/20"
+                : "text-amber-600/90 bg-amber-500/8 border-amber-500/20"
+            )}
+          >
+            {record.error_message}
+          </p>
+        )}
+
         <SimulationLogPanel record={record} />
 
-        {/* Action Buttons */}
-        {isFailed && (
-          <Button
-            size="sm"
-            className="w-full rounded-xl gap-2"
-            onClick={() => {
-              if (!record.job_id) {
-                toast.error("Fehler: job_id fehlt. Bitte Backend-Schema prüfen.");
-                return;
-              }
-              retryMutation.mutate(record.job_id);
-            }}
-            disabled={retryMutation.isPending || !record.job_id}
-          >
-            {retryMutation.isPending ? (
-              <Loader2 className="h-3.5 w-3.5 animate-spin" />
-            ) : (
-              <RotateCcw className="h-3.5 w-3.5" />
+        {/* Retry (FAILED) / Resend (PARTIALLY_COMPLETE) */}
+        {canRetry && (
+          <div className="space-y-2">
+            {isPartial && (
+              <label className="flex items-center gap-2 text-[11px] text-muted-foreground/70 cursor-pointer select-none">
+                <Checkbox
+                  checked={rotatePassword}
+                  onCheckedChange={(checked) => setRotatePassword(checked === true)}
+                />
+                Neues Passwort generieren (widerruft ein ggf. bereits zugestelltes Passwort)
+              </label>
             )}
-            Vorgang wiederholen
-          </Button>
+            <Button
+              size="sm"
+              className="w-full rounded-xl gap-2"
+              onClick={handleRetry}
+              disabled={retryMutation.isPending || !record.job_id}
+            >
+              {retryMutation.isPending ? (
+                <Loader2 className="h-3.5 w-3.5 animate-spin" />
+              ) : isPartial ? (
+                <Send className="h-3.5 w-3.5" />
+              ) : (
+                <RotateCcw className="h-3.5 w-3.5" />
+              )}
+              {isPartial ? "Benachrichtigungen erneut senden" : "Vorgang wiederholen"}
+            </Button>
+          </div>
+        )}
+
+        {/* Rollback — hard delete. Only for FAILED / PARTIALLY_COMPLETE, never COMPLETED. */}
+        {canRollback && (
+          <Dialog open={rollbackConfirmOpen} onOpenChange={setRollbackConfirmOpen}>
+            <DialogTrigger className="inline-flex w-full items-center justify-center gap-2 whitespace-nowrap rounded-xl border border-danger/30 bg-background h-9 px-3 text-xs font-medium text-danger ring-offset-background transition-colors hover:bg-danger/5 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 disabled:pointer-events-none disabled:opacity-50">
+              <Trash2 className="h-3.5 w-3.5" />
+              Vorgang löschen
+            </DialogTrigger>
+            <DialogContent className="sm:max-w-[440px] rounded-2xl">
+              <DialogHeader className="gap-4">
+                <div className="flex h-12 w-12 items-center justify-center rounded-2xl bg-danger/8 ring-1 ring-danger/15">
+                  <AlertTriangle className="h-6 w-6 text-danger" aria-hidden="true" />
+                </div>
+                <div>
+                  <DialogTitle className="text-lg font-semibold">Vorgang endgültig löschen?</DialogTitle>
+                  <p className="text-sm text-muted-foreground/80 leading-relaxed mt-1.5">
+                    Dies entfernt den Datensatz für{" "}
+                    <strong className="text-foreground">{record.first_name} {record.last_name}</strong>{" "}
+                    unwiderruflich — inklusive eines eventuell bereits angelegten Verzeichniseintrags.
+                    Dies ist <strong>kein</strong> Offboarding und kann nicht rückgängig gemacht werden.
+                  </p>
+                </div>
+              </DialogHeader>
+              <DialogFooter className="gap-2 sm:gap-0 pt-2">
+                <Button
+                  variant="outline"
+                  onClick={() => setRollbackConfirmOpen(false)}
+                  disabled={rollbackMutation.isPending}
+                  className="rounded-xl"
+                >
+                  Abbrechen
+                </Button>
+                <Button
+                  variant="destructive"
+                  onClick={handleRollbackConfirm}
+                  disabled={rollbackMutation.isPending}
+                  className="rounded-xl gap-2"
+                >
+                  {rollbackMutation.isPending ? (
+                    <Loader2 className="h-3.5 w-3.5 animate-spin" />
+                  ) : (
+                    <Trash2 className="h-3.5 w-3.5" />
+                  )}
+                  Ja, endgültig löschen
+                </Button>
+              </DialogFooter>
+            </DialogContent>
+          </Dialog>
         )}
 
         {canOffboard && (
