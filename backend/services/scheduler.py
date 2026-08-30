@@ -11,8 +11,8 @@ from schemas.scan import ScanRequest
 from settings import get_settings
 
 from services import scanner
-from services.report_service import generate_and_send_report_task
 from services.onboarding_sweeper import sweep_stale_onboarding_jobs
+from services.report_service import generate_and_send_report_task
 
 logger = logging.getLogger(__name__)
 
