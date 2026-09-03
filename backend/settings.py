@@ -45,6 +45,9 @@ class Settings(BaseSettings):
     # ONBOARDING
     ONBOARDING_STALE_TIMEOUT_MINUTES: int = 2
 
+    #EMAIL ALERTS
+    ADMIN_ALERT_EMAIL: str = ""
+
     @model_validator(mode="after")
     def _validate_identity_provider_config(self) -> "Settings":
         if self.IDENTITY_PROVIDER == "ldap" and not self.LDAP_BIND_PASSWORD:
