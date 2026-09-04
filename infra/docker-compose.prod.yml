@@ -3,7 +3,8 @@
 #  Run from: /opt/it-automation/app/infra/
 #  Secrets:  /opt/it-automation/.env  (outside repo, chmod 600, never committed)
 #
-#  Ingress: cloudflared (outbound-only tunnel) -> nginx -> fastapi
+#  Ingress: nginx listens directly on 80/443 (TLS via Let's Encrypt),
+#           DNS via DuckDNS (christian-it-automation.duckdns.org)
 #  Scanning: fastapi reaches home LAN via the VM's wg0 WireGuard
 #            interface (host-level route), NOT via network_mode: host.
 # ============================================================
@@ -172,31 +173,17 @@ services:
 
   nginx:
     image: nginx:alpine
+    ports:
+      - "80:80"
+      - "443:443"
     volumes:
       - ./nginx.conf:/etc/nginx/nginx.conf:ro
+      - /etc/letsencrypt:/etc/letsencrypt:ro
     networks:
       - itautomation_net
     depends_on:
       fastapi:
         condition: service_healthy
-    restart: always
-    mem_limit: 128m
-    logging:
-      driver: json-file
-      options:
-        max-size: "5m"
-        max-file: "2"
-
-
-  cloudflared:
-    image: cloudflare/cloudflared:latest
-    command: tunnel run
-    environment:
-      - TUNNEL_TOKEN=${CLOUDFLARE_TUNNEL_TOKEN}
-    networks:
-      - itautomation_net
-    depends_on:
-      - nginx
     restart: always
     mem_limit: 128m
     logging:
