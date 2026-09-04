@@ -6,11 +6,16 @@ on:
   pull_request:
     branches: [main, development]
 
+permissions:
+  contents: read
+
 jobs:
   # ── Secret scanning ─────────────────────────────────────────
   secret-scan:
     name: Secret Scan
     runs-on: ubuntu-latest
+    permissions:
+      contents: read
     steps:
       - uses: actions/checkout@v4
         with:
