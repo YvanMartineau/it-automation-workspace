@@ -78,13 +78,13 @@ class Settings(BaseSettings):
     # ADMIN_ALERT_EMAIL: str #Not Yet Implemented
 
     # App
-    FRONTEND_URL: str = "http://localhost:5173"
+    FRONTEND_URL: str = "https://it-automation-workspace.martineaubadou9.workers.dev"
     # dev: http://localhost:5173,
     # prod: https://it-automation-workspace.martineaubadou9.workers.dev/
     ALLOWED_SCAN_SUBNET: str = (
         "192.168.179.0/24"  # For Local(Discovers my WIFI devices) and #192.168.1.0/24 for Prod
     )
-    APP_ENV: str = "development"  # dev: development, #prod: production
+    APP_ENV: str = "production"  # dev: development, #prod: production
     LOG_LEVEL: str = "INFO"
 
 
