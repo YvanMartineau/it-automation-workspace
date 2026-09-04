@@ -16,7 +16,7 @@ class Base(DeclarativeBase):
 engine = create_async_engine(
     # we use local postgres for now.
     # settings.DATABASE_URL, echo=False, pool_pre_ping=True, pool_size=5, max_overflow=10,
-    settings.DATABASE_URL, #dev: settings.DEV_DATABASE_URL, #prod: settings.DATABASE_URL
+    settings.DATABASE_URL,  # dev: settings.DEV_DATABASE_URL, #prod: settings.DATABASE_URL
     echo=False,
     pool_pre_ping=True,
     pool_size=5,
