@@ -3,7 +3,8 @@ import axios from "axios";
 import { useAuthStore } from "#/hooks/useAuth";
 
 export const api = axios.create({
-  baseURL: "/api",
+  baseURL: "/api", //development: "baseURL: "/api" 
+  //production: "baseURL: "https://christian-it-automation.duckdns.org/api"
   withCredentials: true, // required so the httpOnly refresh_token cookie is sent/received
   timeout: 10000,
 });
@@ -40,7 +41,9 @@ let refreshPromise: Promise<string> | null = null;
 async function refreshAccessToken(): Promise<string> {
   if (!refreshPromise) {
     refreshPromise = axios
-      .post<{ access_token: string }>("/api/auth/refresh", null, { withCredentials: true })
+      .post<{ access_token: string }>("https://christian-it-automation.duckdns.org/api/auth/refresh", null, { withCredentials: true }) 
+      //development: "/api/auth/refresh"
+      //production: "https://christian-it-automation.duckdns.org/api/auth/refresh"
       .then((res) => res.data.access_token)
       .finally(() => {
         refreshPromise = null;
