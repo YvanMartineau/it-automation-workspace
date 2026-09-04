@@ -3,7 +3,7 @@ import axios from "axios";
 import { useAuthStore } from "#/hooks/useAuth";
 
 export const api = axios.create({
-  baseURL: "/api", //development: "baseURL: "/api" 
+  baseURL: "https://christian-it-automation.duckdns.org/api", //development: "baseURL: "/api" 
   //production: "baseURL: "https://christian-it-automation.duckdns.org/api"
   withCredentials: true, // required so the httpOnly refresh_token cookie is sent/received
   timeout: 10000,
