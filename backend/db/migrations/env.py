@@ -22,7 +22,10 @@ if config.config_file_name is not None:
 # from myapp import mymodel
 
 # add each new model import here as you build more
-config.set_main_option("sqlalchemy.url", get_settings().DEV_DATABASE_URL)
+# dev
+# config.set_main_option("sqlalchemy.url", get_settings().DEV_DATABASE_URL)
+# prod
+config.set_main_option("sqlalchemy.url", get_settings().DATABASE_URL)
 
 # target_metadata = mymodel.Base.metadata
 target_metadata = Base.metadata
