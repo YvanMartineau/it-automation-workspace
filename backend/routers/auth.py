@@ -64,7 +64,7 @@ def _set_refresh_cookie(response: Response, token: str) -> None:
         value=token,
         httponly=True,
         secure=True,
-        samesite="none", #dev:samesite="strict" #prod:samesite="none"
+        samesite="none",  # dev:samesite="strict" #prod:samesite="none"
         max_age=REFRESH_COOKIE_MAX_AGE,
     )
 
