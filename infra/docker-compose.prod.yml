@@ -153,7 +153,7 @@ services:
     environment:
       - N8N_HOST=localhost
       - N8N_PORT=5678
-      - N8N_WEBHOOK_URL=http://n8n:5678
+      - NN8N_WEBHOOK_URL=http://localhost:5678
       - N8N_CALLBACK_SECRET=${N8N_CALLBACK_SECRET}
     ports:
       - "127.0.0.1:5678:5678"   # loopback only — reach via SSH tunnel, not public
