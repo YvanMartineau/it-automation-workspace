@@ -69,12 +69,12 @@ def seed_ldap_structure() -> None:
 async def _seed_users(db) -> dict[str, User]:
     seed_data = [
         {
-            "email": os.getenv("SEED_ADMIN_EMAIL", "admin@dev.de"),
+            "email": os.getenv("SEED_ADMIN_EMAIL", "tester@prod.de"),  # env: admin@dev.de
             "password": os.getenv("SEED_ADMIN_PASSWORD"),
             "role": "admin",
         },
         {
-            "email": os.getenv("SEED_VIEWER_EMAIL", "viewer@dev.de"),
+            "email": os.getenv("SEED_VIEWER_EMAIL", "viewer@prod.de"),  # env: viewer@dev.de
             "password": os.getenv("SEED_VIEWER_PASSWORD"),
             "role": "viewer",
         },
