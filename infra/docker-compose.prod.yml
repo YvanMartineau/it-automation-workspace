@@ -18,6 +18,8 @@ services:
     env_file: /opt/it-automation/.env
     networks:
       - itautomation_net
+    dns:
+      - 192.168.179.1
     cap_add:
       - NET_RAW      # raw ICMP / SYN scans
       - NET_ADMIN    # commonly needed alongside NET_RAW
