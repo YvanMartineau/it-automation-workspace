@@ -58,7 +58,7 @@
 
 ---
 
-## ADR-004 — Database: Aiven PostgreSQL (EU, free tier)
+## ADR-004 — Database: Self-hosted Postgres container, not Aiven (for V1)
 
 **Date:** Project start
 **Status:** Accepted
@@ -67,11 +67,15 @@
 
 **Options considered:** Supabase Free, Neon Free, Aiven Free, self-hosted PostgreSQL on Oracle VM
 
-**Decision:** Aiven Free Tier, EU region (DigitalOcean Frankfurt).
+**Decision:** Run postgres:16-alpine as a container on the VM instead of using Aiven's managed free-tier Postgres. 
+
+**Why:** Aiven integration is deferred to V2. Keeping V1 self-contained on
+one VM reduces moving parts during initial deployment.
 
 **Rationale:** Aiven is Finland-headquartered (EU-incorporated, no CLOUD Act exposure at the Aiven layer). Positions the project as GDPR-aware infrastructure — a direct signal to German IT hiring managers. SQLite rejected: file-based, no cross-deployment sharing, write contention under demo load.
 
-**Consequences:** Sub-processor is DigitalOcean (US-headquartered). Documented in PRIVACY.md. sslmode=require mandatory — connection string uses ssl=require with asyncpg driver. Free instance stops after inactivity — GitHub Actions keep-alive cron required.
+**Consequences:** Backups are now entirely our responsibility (see `BACKUP-RESTORE.md`) — no managed-provider safety net. Revisit in V2.
+For V2:Sub-processor is DigitalOcean (US-headquartered). Documented in PRIVACY.md. sslmode=require mandatory — connection string uses ssl=require with asyncpg driver. Free instance stops after inactivity — GitHub Actions keep-alive cron required.
 
 ---
 

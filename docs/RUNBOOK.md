@@ -1,111 +1,105 @@
-# Runbook — Project 1: IT Automation Platform
-> Detection → Immediate steps → Fallback → Verify recovery
-> Test every scenario before demo day.
+# RUNBOOK.md — Day-to-Day Operations
 
----
+## Service map
 
-## SCENARIO 1 — Aiven PostgreSQL instance offline
+| Service | Reachable | Notes |
+|---|---|---|
+| fastapi | via nginx only (`/api/`), no published port | healthcheck: `/health` |
+| postgres | internal only, no published port | healthcheck: `pg_isready` |
+| n8n | `127.0.0.1:5678` on VM only | SSH tunnel to reach UI, see below |
+| openldap | internal only | no published port |
+| lam (LDAP admin UI) | `127.0.0.1:8080` on VM only | SSH tunnel, `--profile tools` |
+| nginx | `80`/`443` public | TLS via Let's Encrypt |
+| pg_backup | internal, no ports | daily `pg_dump`, see `BACKUP-RESTORE.md` |
 
-**Detection:** FastAPI returns 503. Logs show `asyncpg.exceptions.ConnectionDoesNotExistError`. Aiven dashboard shows instance status "Stopped".
+## Common commands
 
-**Immediate steps:**
-1. Log in to Aiven console at console.aiven.io
-2. Find the PostgreSQL service — click "Power On"
-3. Wait ~60 seconds for instance to start
-4. Verify: `psql $DATABASE_URL -c "SELECT 1;"`
-5. Restart FastAPI: `docker compose restart fastapi`
+All run from `/opt/it-automation/app/infra/`.
 
-**Fallback (if Aiven is unavailable for >5 minutes during demo):**
-1. `docker compose up postgres_local` — starts local PostgreSQL
-2. Update `DATABASE_URL` in `.env` to `DEV_DATABASE_URL` value
-3. `docker compose restart fastapi`
-4. Run `python seed.py` to repopulate demo data
-5. Continue demo on local DB — explain to interviewer: "This is the local failover documented in my runbook."
+```bash
+docker compose -f docker-compose.prod.yml ps                    # status
+docker compose -f docker-compose.prod.yml logs -f fastapi        # tail logs
+docker compose -f docker-compose.prod.yml restart fastapi        # restart one service
+docker compose -f docker-compose.prod.yml up -d --build fastapi  # rebuild + redeploy one service after a code change
+```
 
-**Prevention:** GitHub Actions keep-alive cron pings Aiven every Monday. Verify cron is active at github.com → repo → Actions → Aiven Keep-Alive.
+## Deploying a code change
 
----
+```bash
+cd /opt/it-automation/app
+git pull
+cd infra
+docker compose -f docker-compose.prod.yml build fastapi   # only if backend/ changed
+docker compose -f docker-compose.prod.yml up -d
+```
+`nginx.conf` changes need no rebuild — it's a live-mounted volume, `up -d`
+picks up the new file. Frontend changes are out of band, deployed via
+Cloudflare Pages directly.
 
-## SCENARIO 2 — Oracle VM unreachable
+## Reaching n8n's UI
 
-**Detection:** Public URL (Cloudflare domain) returns 502 or times out. SSH to VM fails.
+```bash
+ssh -i ~/.ssh/oracle_it_automation.key -L 5678:localhost:5678 ubuntu@130.61.157.106
+```
+Keep that terminal open, then browse to `http://localhost:5678`. n8n has
+no built-in authentication currently — see `DECISIONS.md` #6.
 
-**Immediate steps:**
-1. Check Oracle Cloud console — verify VM is running
-2. If VM shows "Stopped": Start from OCI console
-3. Wait 2 minutes for systemd to restart docker-compose
-4. SSH in and verify: `docker compose ps` — all services should show "Up"
-5. If tunnel is down: `sudo systemctl restart cloudflared`
+## Reaching LDAP Account Manager (LAM)
 
-**Fallback (demo mode):**
-1. `cd p1-automation && docker compose up` on local machine
-2. Demo runs on localhost — public URL not required for a local demo
-3. Explain: "The Oracle VM had an issue — I'm showing you the identical local environment."
+```bash
+ssh -i ~/.ssh/oracle_it_automation.key -L 8080:localhost:8080 ubuntu@130.61.157.106
+docker compose -f docker-compose.prod.yml --profile tools up -d lam   # if not already running
+```
+Browse to `http://localhost:8080`.
 
-**Prevention:** Systemd service unit restarts docker-compose on reboot. Test: `sudo reboot` → SSH back after 2 min → verify services running.
+## Checking certificate renewal health
 
----
+```bash
+sudo systemctl status certbot.timer
+sudo certbot certificates
+```
+Confirms expiry date and that the renewal hooks (stop/start nginx) exist:
+```bash
+ls /etc/letsencrypt/renewal-hooks/pre/ /etc/letsencrypt/renewal-hooks/post/
+```
 
-## SCENARIO 3 — M365 Developer Tenant lapsed
+## Checking the WireGuard tunnel (needed for live device scanning)
 
-**Detection:** `POST /onboard` returns 401 from Microsoft Graph. Logs show `AuthenticationError`. M365 admin center inaccessible.
+**On the VM:**
+```bash
+sudo wg show
+ping 192.168.179.1   # or any known home-LAN device
+```
+**On the laptop:** confirm it's on the main WiFi (not guest-isolated),
+and the tunnel is up: `sudo wg show`. If either side shows no recent
+handshake, the laptop is likely asleep/off-network — this is the known,
+documented availability constraint (`DECISIONS.md` #3), not a bug to
+chase.
 
-**Immediate steps:**
-1. Go to developer.microsoft.com/microsoft-365/dev-program
-2. Log in → check tenant status → click "Renew" if available
-3. If tenant is permanently expired: re-register → recreate app registration → update GRAPH_TENANT_ID, GRAPH_CLIENT_ID, GRAPH_CLIENT_SECRET in .env
-4. Restart FastAPI: `docker compose restart fastapi`
+**Expected data when a remote scan succeeds:** devices will be discovered
+(IP, open ports, reachability, best-effort OS guess with its confidence
+shown), but MAC address and CPU/RAM will never appear for any home-LAN
+device — confirmed, permanent limitations of this topology, not signs of
+a broken tunnel. See `DECISIONS.md` #11 for the exact mechanism if this
+comes up in a demo/interview.
 
-**Fallback (demo mode):**
-1. In `services/graph_client.py`, enable the local simulation mode:
-   `SIMULATION_MODE = os.getenv("GRAPH_SIMULATION", "false") == "true"`
-2. Set `GRAPH_SIMULATION=true` in .env
-3. Simulation returns a fake user_id — onboarding flow completes, email/Jira still fire via n8n
-4. Explain to interviewer: "The M365 tenant lapsed — I'm showing the simulation fallback I built for exactly this scenario."
+## DuckDNS updater
 
-**Prevention:** Calendar reminder every 21 days: log into developer.microsoft.com. Tenant lapses after 90 days of inactivity.
+Cron entry (`crontab -e` on the VM), runs every 5 minutes:
+```
+*/5 * * * * ~/duckdns/duck.sh >/dev/null 2>&1
+```
+Check `~/duckdns/duck.log` — should read `OK`. `KO` means token/subdomain
+mismatch in `~/duckdns/duck.sh`.
 
----
+## Rotating a secret (e.g. JWT_SECRET_KEY, POSTGRES_PASSWORD)
 
-## SCENARIO 4 — n8n webhook fails (welcome email / Jira ticket not created)
-
-**Detection:** Onboarding returns 200 (success) but welcome email not received. Jira ticket not created. Logs show `n8n webhook call failed`.
-
-**Note:** This is expected and handled — n8n is not in the critical path. The user was created in Entra ID successfully.
-
-**Immediate steps:**
-1. Check n8n: open localhost:5678 or cloudflare-domain/n8n
-2. Check n8n execution history — find the failed execution
-3. Re-run the failed execution manually from n8n UI
-4. If n8n container is down: `docker compose restart n8n`
-
-**Prevention:** n8n has mem_limit: 512m in docker-compose. Without this it can OOM. Verify: `docker stats` — n8n memory usage should stay under 400MB.
-
----
-
-## SCENARIO 5 — Cloudflare Tunnel disconnected
-
-**Detection:** Public URL returns 502. Oracle VM is reachable via SSH. Docker services are running.
-
-**Immediate steps:**
-1. SSH to VM
-2. Check tunnel status: `sudo systemctl status cloudflared`
-3. If stopped: `sudo systemctl start cloudflared`
-4. If failing: `cloudflared tunnel run p1-automation` — check error output
-5. Verify: curl the public URL from outside the VM
-
-**Fallback:** Demo on localhost. Tunnel is not required for local demo.
-
----
-
-## SCENARIO 6 — Docker compose fails to start on Oracle VM after reboot
-
-**Detection:** SSH to VM. `docker compose ps` shows all services "Exited".
-
-**Immediate steps:**
-1. `docker compose logs fastapi` — check for startup error (usually missing env var)
-2. Verify `.env` file exists: `ls -la .env`
-3. `docker compose up -d` — restart all services
-4. If FastAPI exits immediately: `docker compose logs fastapi --tail 50` — look for `ValidationError` from settings.py (missing env var)
-
-**Prevention:** settings.py raises ValueError at startup if any required env var is missing. The error message names the missing variable. Fix the .env and restart.
+1. Generate a new value, edit `/opt/it-automation/.env`
+2. `docker compose -f docker-compose.prod.yml up -d` (recreates any
+   service whose env changed)
+3. Note: rotating `JWT_SECRET_KEY` invalidates all existing sessions —
+   every user must log in again. Rotating `POSTGRES_PASSWORD` requires
+   also updating it inside Postgres itself
+   (`ALTER USER prod WITH PASSWORD '...'`) since Postgres doesn't read
+   `.env` after first init — the compose env var only affects first-init
+   or a fresh volume.
